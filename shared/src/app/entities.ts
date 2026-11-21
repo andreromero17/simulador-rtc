@@ -271,7 +271,7 @@ export const appEntities: Record<string, EntityDef> = {
         maxLength: 10,
         col: 3,
         section: 'Classificação',
-        help: 'Ex.: 1.01, 17.01. Usado para achar o NBS e o cClassTrib.',
+        help: 'Ex.: 1.01, 17.01 ou o código nacional da NFS-e (010101). Usado para achar o NBS e o cClassTrib.',
       },
       { name: 'nbs', label: 'NBS', type: 'text', maxLength: 12, search: true, col: 3, section: 'Classificação' },
       {

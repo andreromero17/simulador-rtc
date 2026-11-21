@@ -3,6 +3,11 @@
 Versões do sistema construído sobre o frame (a versão fica em `shared/src/app/info.ts`).
 As versões do frame estão no `CHANGELOG.md` da raiz.
 
+## 0.1.1 — 2026-11-21
+
+- Item da LC 116 aceita o código de tributação nacional da NFS-e com 6 dígitos (`010101`, `01.01.01`, `010101 - descrição`),
+  também como coluna "Código de tributação nacional" na importação.
+
 ## 0.1.0 — 2026-11-21
 
 - Primeira versão do Simulador RTC sobre o frame 0.31.0.

@@ -24,14 +24,21 @@ for (const s of SERVICOS) {
   porItem.set(s.item, [...(porItem.get(s.item) ?? []), s]);
 }
 
-/** "01.01", "1.1", " 1.01 " → "1.01"; "101" → "1.01" */
+/**
+ * Item da LC 116 em qualquer formato usual → "1.01":
+ *   "1.01", "01.01", "1.1", "101", "0101" e o código de tributação nacional da NFS-e com 6 dígitos
+ *   ("010101", "01.01.01" — item, subitem e desdobramento; o desdobramento é ignorado).
+ */
 export function normalizarItem(v: unknown): string {
   const s = String(v ?? '')
     .trim()
-    .replace(',', '.');
+    .replace(/,/g, '.')
+    .replace(/\s*[-–].*$/, ''); // "010101 - Análise e desenvolvimento" → "010101"
   if (!s) return '';
-  let m = /^(\d{1,2})\.(\d{1,2})$/.exec(s);
+  let m = /^(\d{1,2})\.(\d{1,2})(?:\.\d{1,2})?$/.exec(s);
   if (m) return `${Number(m[1])}.${m[2]!.padStart(2, '0')}`;
+  m = /^(\d{2})(\d{2})(\d{2})$/.exec(s);
+  if (m) return `${Number(m[1])}.${m[2]}`;
   m = /^(\d{1,2})(\d{2})$/.exec(s);
   if (m) return `${Number(m[1])}.${m[2]}`;
   return s;

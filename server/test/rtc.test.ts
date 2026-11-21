@@ -42,6 +42,11 @@ describe('dados de referência', () => {
   it('catálogo: normaliza item e sugere cClassTrib', () => {
     expect(normalizarItem('01.01')).toBe('1.01');
     expect(normalizarItem('1701')).toBe('17.01');
+    // código de tributação nacional da NFS-e (6 dígitos: item, subitem, desdobramento)
+    expect(normalizarItem('010101')).toBe('1.01');
+    expect(normalizarItem('01.01.01')).toBe('1.01');
+    expect(normalizarItem('170101')).toBe('17.01');
+    expect(normalizarItem('040301 - Hospitais e clínicas')).toBe('4.03');
     expect(sugerirCClassTrib('', '1.01', '000001')).toBe('000001');
     expect(sugerirCClassTrib('', '4.03', '000001')).toBe('200029');
   });
