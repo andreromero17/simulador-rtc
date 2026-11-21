@@ -143,6 +143,13 @@ backup fora do servidor)._
   conta nova — migrar depois), endereço `<ip>.sslip.io` até haver domínio, e-mail pelo Gmail (senha de app) até
   haver domínio para o SES
 - Depois do domínio: SES para e-mail; cópia de backup fora do servidor (bucket); migrar para São Paulo
+- **Login social (Google primeiro)**, depois do domínio (o Google não aceita bem `sslip.io` nos domínios autorizados):
+  OpenID Connect com code + PKCE no servidor (`/api/auth/google/inicio` e `/retorno`; valida assinatura, `aud`,
+  `nonce`, `email_verified`) e a mesma sessão `sid`; tabela `identidades_externas` (usuário, provedor, `sub`; liga
+  pelo `sub`, não pelo e-mail); conta existente ligada pelo e-mail verificado; 2FA continua depois do Google;
+  cadastro fechado = só quem já tem conta ou chega com convite; aberto = sem confirmar e-mail, com aceite dos termos;
+  "Contas conectadas" em Meu perfil (não desligar se ficar sem senha); `GOOGLE_CLIENT_ID`/`SECRET` só no `.env`
+  (sem eles o botão não aparece); testes com o Google simulado
 - Segurança: cifrar os segredos de 2FA com chave do `.env`; e-mail ao dono quando o suporte entra
 - Monitoramento e log de erros (Sentry)
 - **PWA:** instalável no celular, com ícone e cache básico. Cobre boa parte do "mobile" sem app nativo.
