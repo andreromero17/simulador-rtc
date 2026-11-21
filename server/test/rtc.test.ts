@@ -133,6 +133,19 @@ describe('importação', () => {
     expect(Number(ativas?.n)).toBe(3);
   });
 
+  it('clientes e fornecedores só da empresa, com totais', async () => {
+    const outra = await empresa();
+    const r = await ctx.admin.get(`/api/rtc/parceiros?empresa_id=${outra}`);
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual([]);
+    const emp = (await ctx.db('receitas').orderBy('id', 'desc').first('empresa_id')).empresa_id;
+    const lista = (await ctx.admin.get(`/api/rtc/parceiros?empresa_id=${emp}`)).body;
+    const real = lista.find((p: { nome: string }) => p.nome === 'Cliente Real S.A.');
+    expect(real).toMatchObject({ faturado: 22000.5, notas: 2, comprado: 0 });
+    expect(lista.find((p: { nome: string }) => p.nome === 'Fornecedor Nuvem')).toMatchObject({ comprado: 800 });
+    expect((await ctx.admin.get('/api/rtc/parceiros')).status).toBe(422);
+  });
+
   it('modelo e permissões', async () => {
     const m = await ctx.admin
       .get('/api/rtc/importar/modelo')

@@ -6,6 +6,7 @@ import type { Db } from '../db/knex';
 import { badRequest } from '../utils/http';
 import { buscarServicos, CATALOGO_META, ITENS_LC116, sugerirCClassTrib, candidatos } from './rtc/catalogo';
 import { atualizarParceiros } from './rtc/cnpj';
+import { parceirosDaEmpresa } from './rtc/parceiros';
 import { importar, modeloPlanilha, previaImportacao } from './rtc/importacao';
 import { rodarSimulacao } from './rtc/simulacao';
 
@@ -16,6 +17,7 @@ import { rodarSimulacao } from './rtc/simulacao';
  *   GET  /api/rtc/cclasstrib                  tabela de cClassTrib (com reduções)
  *   GET  /api/rtc/importar/modelo             planilha modelo (.xlsx)
  *   POST /api/rtc/importar?empresa_id=&previa=1&substituir=1   corpo = arquivo .xlsx
+ *   GET  /api/rtc/parceiros?empresa_id=        clientes e fornecedores da empresa, com totais de 2026
  *   POST /api/rtc/parceiros/consultar         { ids?: number[] } consulta CNPJs (regime Simples/MEI)
  */
 export function appRouter(db: Db) {
@@ -90,6 +92,12 @@ export function appRouter(db: Db) {
       );
     },
   );
+
+  router.get('/rtc/parceiros', requirePermission('parceiros', 'ver'), async (req, res) => {
+    const empresaId = Number(req.query.empresa_id);
+    if (!empresaId) throw badRequest('Escolha a empresa');
+    res.json(await parceirosDaEmpresa(db, empresaId));
+  });
 
   router.post('/rtc/parceiros/consultar', requirePermission('parceiros', 'editar'), async (req, res) => {
     const ids = Array.isArray(req.body?.ids) ? (req.body.ids as unknown[]).map(Number).filter(Boolean) : undefined;

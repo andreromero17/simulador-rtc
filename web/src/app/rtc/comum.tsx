@@ -42,3 +42,32 @@ export function SeletorEmpresa({
     </Form.Select>
   );
 }
+
+/**
+ * Faixa no topo das listagens: escolhe a empresa ativa e deixa claro que só os dados dela aparecem
+ * (para apresentar ao cliente sem mostrar dados de outras empresas).
+ */
+export function BarraEmpresa({
+  empresas,
+  valor,
+  onChange,
+  texto = 'Mostrando somente os dados desta empresa.',
+}: {
+  empresas: Row[] | null;
+  valor: number | null;
+  onChange: (id: number) => void;
+  texto?: string;
+}) {
+  return (
+    <div className="rtc-barra-empresa rtc-nao-imprimir">
+      <i className="bi bi-buildings" />
+      <span className="fw-semibold">Empresa</span>
+      {empresas ? (
+        <SeletorEmpresa empresas={empresas} valor={valor} onChange={onChange} />
+      ) : (
+        <span className="spinner-border spinner-border-sm" />
+      )}
+      <span className="small text-muted">{texto}</span>
+    </div>
+  );
+}

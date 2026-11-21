@@ -41,3 +41,19 @@ export interface ServicoDoCatalogo {
   cclasstrib: string[];
   classificacoes: { codigo: string; descricao: string; reducao: number }[];
 }
+
+/** Cliente/fornecedor de uma empresa, com os totais de 2026 (GET /api/rtc/parceiros?empresa_id=) */
+export interface ParceiroDaEmpresa {
+  id: number;
+  nome: string;
+  documento: string | null;
+  tipo: string;
+  regime: string;
+  uf: string | null;
+  /** Já passou pela consulta de CNPJ */
+  consultado: boolean;
+  faturado: number;
+  notas: number;
+  comprado: number;
+  lancamentos: number;
+}

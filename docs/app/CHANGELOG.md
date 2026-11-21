@@ -3,6 +3,13 @@
 Versões do sistema construído sobre o frame (a versão fica em `shared/src/app/info.ts`).
 As versões do frame estão no `CHANGELOG.md` da raiz.
 
+## 0.2.0 — 2026-11-21
+
+- Empresa ativa: Receitas, Custos e despesas e Clientes/fornecedores mostram só os dados da empresa escolhida no
+  topo (a mesma da Simulação e da Importação, lembrada entre as telas). O "Novo" já vem com a empresa preenchida.
+- Clientes/fornecedores: visão "Desta empresa" (com faturado e comprado em 2026 e consulta de CNPJ só dos pendentes)
+  e "Cadastro geral" (todos). Rota `GET /api/rtc/parceiros?empresa_id=`.
+
 ## 0.1.1 — 2026-11-21
 
 - Item da LC 116 aceita o código de tributação nacional da NFS-e com 6 dígitos (`010101`, `01.01.01`, `010101 - descrição`),

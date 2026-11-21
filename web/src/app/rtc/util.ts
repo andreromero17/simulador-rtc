@@ -45,20 +45,36 @@ export function useEmpresas() {
   return empresas;
 }
 
-/** Empresa escolhida, guardada na URL (?empresa=) e lembrada entre as telas */
-export function useEmpresaEscolhida(empresas: Row[] | null) {
+const CHAVE = 'rtc.empresa';
+
+/**
+ * Empresa ativa: uma só para todas as telas do simulador (lembrada no navegador). A URL pode trazer outra
+ * (`?<param>=id`, ex.: um link) — ela passa a ser a ativa. Com `fixarNaUrl`, a tela sempre mostra o parâmetro na URL:
+ * as listagens usam `empresa_id`, que é o próprio filtro do CRUD (e preenche a empresa no "Novo").
+ */
+export function useEmpresaEscolhida(empresas: Row[] | null, param = 'empresa', fixarNaUrl = false) {
   const [params, setParams] = useSearchParams();
-  const daUrl = Number(params.get('empresa')) || null;
-  const lembrada = Number(localStorageGet('rtc.empresa')) || null;
-  const id =
-    (daUrl && empresas?.some((e) => e.id === daUrl) && daUrl) ||
-    (lembrada && empresas?.some((e) => e.id === lembrada) && lembrada) ||
-    empresas?.[0]?.id ||
-    null;
+  const daUrl = Number(params.get(param)) || null;
+  const lembrada = Number(localStorageGet(CHAVE)) || null;
+  const existe = (x: number | null) => !!x && !!empresas?.some((e) => e.id === x);
+  const id = (existe(daUrl) && daUrl) || (existe(lembrada) && lembrada) || empresas?.[0]?.id || null;
+
+  useEffect(() => {
+    if (!id) return;
+    if (lembrada !== id) localStorageSet(CHAVE, String(id));
+    if (fixarNaUrl && daUrl !== id) {
+      const p = new URLSearchParams(params);
+      p.set(param, String(id));
+      p.delete('page');
+      setParams(p, { replace: true });
+    }
+  }, [id, lembrada, daUrl, fixarNaUrl, param, params, setParams]);
+
   const escolher = (novo: number) => {
-    localStorageSet('rtc.empresa', String(novo));
+    localStorageSet(CHAVE, String(novo));
     const p = new URLSearchParams(params);
-    p.set('empresa', String(novo));
+    p.set(param, String(novo));
+    p.delete('page');
     setParams(p, { replace: true });
   };
   return { id, escolher, params, setParams };
