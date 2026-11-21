@@ -207,6 +207,41 @@ describe('importação', () => {
     });
   });
 
+  it('reimportar com CNPJ completa o cadastro feito antes só pelo nome (sem duplicar)', async () => {
+    const empresa_id = await empresa();
+    const arquivo = async (comDoc: boolean) => {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Planilha1');
+      ws.addRow(['Competência', 'CNPJ do cliente', 'Cliente', 'Regime cliente', 'Item LC 116', 'Valor bruto']);
+      ws.addRow([
+        '04/2026',
+        comDoc ? '06.990.590/0001-23' : '',
+        'Provedor Web S.A.',
+        comDoc ? 'Lucro Real' : '',
+        '1.01',
+        1000,
+      ]);
+      return Buffer.from(await wb.xlsx.writeBuffer());
+    };
+    const url = `/api/rtc/importar?empresa_id=${empresa_id}&substituir=1`;
+    await ctx.admin
+      .post(url)
+      .set('Content-Type', 'application/octet-stream')
+      .send(await arquivo(false));
+    const antes = await ctx.db('parceiros').where({ nome: 'Provedor Web S.A.' });
+    expect(antes).toHaveLength(1);
+    expect(antes[0]).toMatchObject({ documento: null, regime: 'Não informado' });
+
+    const buf = await arquivo(true);
+    const previa = await ctx.admin.post(`${url}&previa=1`).set('Content-Type', 'application/octet-stream').send(buf);
+    expect(previa.body).toMatchObject({ parceirosNovos: 0, parceirosExistentes: 1, parceirosCompletados: 1 });
+    const imp = await ctx.admin.post(url).set('Content-Type', 'application/octet-stream').send(buf);
+    expect(imp.body.importadas).toMatchObject({ parceiros: 0, parceirosCompletados: 1 });
+    const depois = await ctx.db('parceiros').where({ nome: 'Provedor Web S.A.' });
+    expect(depois).toHaveLength(1);
+    expect(depois[0]).toMatchObject({ documento: '06.990.590/0001-23', regime: 'Lucro Real' });
+  });
+
   it('modelo e permissões', async () => {
     const m = await ctx.admin
       .get('/api/rtc/importar/modelo')

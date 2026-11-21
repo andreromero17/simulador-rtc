@@ -30,7 +30,8 @@ function Resumo({ p }: { p: PreviaImportacao }) {
       </BsRow>
       <p className="small mb-2">
         <i className="bi bi-people me-1" />
-        {p.parceirosNovos} cliente(s)/fornecedor(es) novo(s) e {p.parceirosExistentes} já cadastrado(s).
+        {p.parceirosNovos} cliente(s)/fornecedor(es) novo(s) e {p.parceirosExistentes} já cadastrado(s)
+        {p.parceirosCompletados > 0 && ` — ${p.parceirosCompletados} deles vão receber o CNPJ/CPF da planilha`}.
       </p>
       {p.categoriasNaoEncontradas.length > 0 && (
         <Alert variant="warning" className="small py-2">
@@ -246,6 +247,9 @@ export default function Importar() {
                 <p>
                   {resultado.importadas.receitas} receita(s), {resultado.importadas.custos} custo(s) e{' '}
                   {resultado.importadas.parceiros} cliente(s)/fornecedor(es) novos
+                  {resultado.importadas.parceirosCompletados
+                    ? ` · ${resultado.importadas.parceirosCompletados} cadastro(s) completado(s) com o CNPJ/CPF`
+                    : ''}
                   {resultado.importadas.substituidas
                     ? ` · ${resultado.importadas.substituidas} lançamento(s) substituído(s)`
                     : ''}

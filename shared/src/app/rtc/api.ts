@@ -16,6 +16,8 @@ export interface PreviaImportacao {
   custos: { linhas: number; validas: number; total: number; competencias: string[] };
   parceirosNovos: number;
   parceirosExistentes: number;
+  /** Já cadastrados sem CNPJ/CPF que vão receber o documento da planilha */
+  parceirosCompletados: number;
   categoriasNaoEncontradas: string[];
   colunasIgnoradas: string[];
   /** Observações da leitura (ex.: aba única lida como Receitas) */
@@ -24,7 +26,13 @@ export interface PreviaImportacao {
 }
 
 export interface ResultadoImportacao extends PreviaImportacao {
-  importadas: { receitas: number; custos: number; parceiros: number; substituidas: number };
+  importadas: {
+    receitas: number;
+    custos: number;
+    parceiros: number;
+    parceirosCompletados: number;
+    substituidas: number;
+  };
 }
 
 export interface ResultadoConsultaCnpj {

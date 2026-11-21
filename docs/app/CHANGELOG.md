@@ -3,6 +3,12 @@
 Versões do sistema construído sobre o frame (a versão fica em `shared/src/app/info.ts`).
 As versões do frame estão no `CHANGELOG.md` da raiz.
 
+## 0.3.1 — 2026-11-21
+
+- Importação: reimportar com o CNPJ/CPF completa o cliente/fornecedor que foi criado antes só pelo nome (sem duplicar)
+  e preenche o regime de quem estava "Não informado". Mais nomes de coluna aceitos para o documento ("CNPJ do cliente",
+  "CNPJ/CPF", "Documento", "ID fiscal", "Tax ID", "CNPJ do fornecedor"...).
+
 ## 0.3.0 — 2026-11-21
 
 - PIS/Cofins de hoje parametrizável na empresa: regime (conforme o regime / cumulativo / não cumulativo) e alíquotas de

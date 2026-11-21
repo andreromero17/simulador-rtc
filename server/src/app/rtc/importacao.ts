@@ -42,6 +42,15 @@ const COLUNAS_RECEITA: Record<string, string[]> = {
     'cpfcnpj',
     'cnpjdotomador',
     'cnpjtomador',
+    'cnpjdocliente',
+    'cpfcnpjdocliente',
+    'cnpjcpf',
+    'documento',
+    'idfiscal',
+    'taxid',
+    'inscricaofederal',
+    'numerodeidentificacaofiscal',
+    'cnpjdestinatario',
   ],
   nome: ['cliente', 'nomecliente', 'razaosocialcliente', 'razaosocial', 'tomador', 'nometomador'],
   regime: ['regimecliente', 'regime'],
@@ -79,7 +88,22 @@ const COLUNAS_RECEITA: Record<string, string[]> = {
 };
 const COLUNAS_CUSTO: Record<string, string[]> = {
   competencia: ['competencia', 'mes', 'data', 'datapagamento', 'vencimento'],
-  documento: ['cnpjfornecedor', 'cpfcnpjfornecedor', 'documentofornecedor', 'cnpj', 'cpfcnpj'],
+  documento: [
+    'cnpjfornecedor',
+    'cpfcnpjfornecedor',
+    'documentofornecedor',
+    'cnpjdofornecedor',
+    'cpfcnpjdofornecedor',
+    'cnpj',
+    'cpfcnpj',
+    'cnpjcpf',
+    'idfiscal',
+    'taxid',
+    'inscricaofederal',
+    'numerodeidentificacaofiscal',
+    'cnpjemitente',
+    'cnpjprestador',
+  ],
   nome: ['fornecedor', 'nomefornecedor', 'razaosocialfornecedor', 'razaosocial', 'favorecido'],
   regime: ['regimefornecedor', 'regime'],
   uf: ['uffornecedor', 'uf'],
@@ -261,12 +285,19 @@ function regimeDe(v: string): string | null {
 }
 
 // ---------------------------------------------------------------- processamento
+interface RefParceiro {
+  id: number;
+  tipo: string;
+  regime: string;
+  temDocumento: boolean;
+}
+
 interface Contexto {
   db: Db;
   empresaId: number;
   categorias: Map<string, number>;
-  parceirosPorDoc: Map<string, { id: number; tipo: string }>;
-  parceirosPorNome: Map<string, { id: number; tipo: string }>;
+  parceirosPorDoc: Map<string, RefParceiro>;
+  parceirosPorNome: Map<string, RefParceiro>;
 }
 
 async function contexto(db: Db, empresaId: number): Promise<Contexto> {
@@ -275,15 +306,19 @@ async function contexto(db: Db, empresaId: number): Promise<Contexto> {
   const categorias = new Map(
     (await db('categorias_custo').select('id', 'nome')).map((c) => [norm(c.nome), Number(c.id)] as const),
   );
-  const parceiros = await db('parceiros').whereNull('excluido_em').select('id', 'nome', 'documento', 'tipo');
+  const parceiros = await db('parceiros').whereNull('excluido_em').select('id', 'nome', 'documento', 'tipo', 'regime');
+  const ref = (p: Record<string, unknown>): RefParceiro => ({
+    id: Number(p.id),
+    tipo: String(p.tipo ?? ''),
+    regime: String(p.regime ?? 'Não informado'),
+    temDocumento: !!p.documento,
+  });
   return {
     db,
     empresaId,
     categorias,
-    parceirosPorDoc: new Map(
-      parceiros.filter((p) => p.documento).map((p) => [onlyDigits(p.documento), { id: Number(p.id), tipo: p.tipo }]),
-    ),
-    parceirosPorNome: new Map(parceiros.map((p) => [norm(p.nome), { id: Number(p.id), tipo: p.tipo }])),
+    parceirosPorDoc: new Map(parceiros.filter((p) => p.documento).map((p) => [onlyDigits(p.documento), ref(p)])),
+    parceirosPorNome: new Map(parceiros.map((p) => [norm(p.nome), ref(p)])),
   };
 }
 
@@ -318,6 +353,19 @@ interface Preparada {
   linha: number;
   registro: Record<string, unknown>;
   parceiro: { documento: string | null; nome: string; regime: string | null; uf: string | null } | null;
+}
+
+/**
+ * Acha o cliente/fornecedor: pelo CNPJ/CPF; sem documento na planilha, pelo nome. Com documento que ainda não
+ * existe, aceita o cadastro de mesmo nome que está SEM documento (importado antes sem CNPJ) — ele será completado.
+ */
+function acharParceiro(ctx: Contexto, p: NonNullable<Preparada['parceiro']>) {
+  if (!p.documento) return { ref: ctx.parceirosPorNome.get(norm(p.nome)), completar: false };
+  const porDoc = ctx.parceirosPorDoc.get(onlyDigits(p.documento));
+  if (porDoc) return { ref: porDoc, completar: false };
+  const porNome = ctx.parceirosPorNome.get(norm(p.nome));
+  if (porNome && !porNome.temDocumento) return { ref: porNome, completar: true };
+  return { ref: undefined, completar: false };
 }
 
 function preparar(ctx: Contexto, abas: Aba[], previa: PreviaImportacao): Preparada[] {
@@ -402,10 +450,9 @@ function preparar(ctx: Contexto, abas: Aba[], previa: PreviaImportacao): Prepara
     const k = p.parceiro.documento ? `d:${onlyDigits(p.parceiro.documento)}` : `n:${norm(p.parceiro.nome)}`;
     if (vistos.has(k)) continue;
     vistos.add(k);
-    const existe = p.parceiro.documento
-      ? ctx.parceirosPorDoc.has(onlyDigits(p.parceiro.documento))
-      : ctx.parceirosPorNome.has(norm(p.parceiro.nome));
-    if (existe) previa.parceirosExistentes++;
+    const { ref, completar } = acharParceiro(ctx, p.parceiro);
+    if (completar) previa.parceirosCompletados++;
+    if (ref) previa.parceirosExistentes++;
     else previa.parceirosNovos++;
   }
   return out;
@@ -416,6 +463,7 @@ const vazia = (): PreviaImportacao => ({
   custos: { linhas: 0, validas: 0, total: 0, competencias: [] },
   parceirosNovos: 0,
   parceirosExistentes: 0,
+  parceirosCompletados: 0,
   categoriasNaoEncontradas: [],
   colunasIgnoradas: [],
   avisos: [],
@@ -456,7 +504,7 @@ export async function importar(
   const entParceiro = getEntity('parceiros')!;
   const entReceita = getEntity('receitas')!;
   const entCusto = getEntity('custos')!;
-  const importadas = { receitas: 0, custos: 0, parceiros: 0, substituidas: 0 };
+  const importadas = { receitas: 0, custos: 0, parceiros: 0, parceirosCompletados: 0, substituidas: 0 };
 
   await c.db.transaction(async (trx) => {
     const op: OpCtx = { ...c, db: trx, semLog: true };
@@ -483,13 +531,24 @@ export async function importar(
 
     const parceiroId = async (p: Preparada['parceiro'], papel: 'Cliente' | 'Fornecedor') => {
       if (!p) return null;
-      const achado = p.documento
-        ? ctx.parceirosPorDoc.get(onlyDigits(p.documento))
-        : ctx.parceirosPorNome.get(norm(p.nome));
+      const { ref: achado, completar } = acharParceiro(ctx, p);
       if (achado) {
-        if (achado.tipo !== papel && achado.tipo !== 'Cliente e fornecedor') {
-          await trx('parceiros').where({ id: achado.id }).update({ tipo: 'Cliente e fornecedor' });
-          achado.tipo = 'Cliente e fornecedor';
+        const mudar: Record<string, unknown> = {};
+        if (achado.tipo !== papel && achado.tipo !== 'Cliente e fornecedor') mudar.tipo = 'Cliente e fornecedor';
+        if (completar && p.documento) {
+          mudar.documento = p.documento;
+          mudar.consultado_em = null; // passa a poder ser consultado
+          achado.temDocumento = true;
+          ctx.parceirosPorDoc.set(onlyDigits(p.documento), achado);
+          importadas.parceirosCompletados++;
+        }
+        // regime vindo da planilha preenche quem ainda está "Não informado" (nunca troca um regime já definido)
+        if (p.regime && achado.regime === 'Não informado') mudar.regime = achado.regime = p.regime;
+        if (Object.keys(mudar).length) {
+          if (mudar.tipo) achado.tipo = String(mudar.tipo);
+          await trx('parceiros')
+            .where({ id: achado.id })
+            .update({ ...mudar, atualizado_em: nowLocal() });
         }
         return achado.id;
       }
@@ -500,7 +559,12 @@ export async function importar(
         regime: p.regime ?? (p.documento && onlyDigits(p.documento).length === 11 ? 'Pessoa física' : 'Não informado'),
         uf: p.uf,
       });
-      const ref = { id: Number(novo.id), tipo: papel as string };
+      const ref: RefParceiro = {
+        id: Number(novo.id),
+        tipo: papel,
+        regime: String(novo.regime ?? 'Não informado'),
+        temDocumento: !!p.documento,
+      };
       if (p.documento) ctx.parceirosPorDoc.set(onlyDigits(p.documento), ref);
       ctx.parceirosPorNome.set(norm(p.nome), ref);
       importadas.parceiros++;
