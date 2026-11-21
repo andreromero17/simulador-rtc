@@ -1,6 +1,6 @@
 {
   "name": "@frame/shared",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "private": true,
   "type": "module",
   "description": "Tipos, definição das entidades e validação compartilhados entre server e web",

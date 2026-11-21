@@ -116,23 +116,11 @@ export default function FilterPanel({ show, onHide, ent, params, onApply, relOpt
                     (relOptions[f.name] ?? []).map((o) => ({ value: String(o.value), label: o.label })),
                   )
                 ) : (
-                  <Form.Select
-                    multiple
-                    htmlSize={6}
-                    value={(draft[f.name] as string[]) ?? []}
-                    onChange={(e) =>
-                      set(
-                        f.name,
-                        Array.from(e.target.selectedOptions, (o) => o.value),
-                      )
-                    }
-                  >
-                    {relOptions[f.name].map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </Form.Select>
+                  <ListaComBusca
+                    opcoes={relOptions[f.name]}
+                    marcados={(draft[f.name] as string[]) ?? []}
+                    onChange={(v) => set(f.name, v)}
+                  />
                 ))}
               {f.type === 'boolean' && (
                 <Form.Select value={(draft[f.name] as string) ?? ''} onChange={(e) => set(f.name, e.target.value)}>
@@ -200,5 +188,63 @@ export default function FilterPanel({ show, onHide, ent, params, onApply, relOpt
         </div>
       </Offcanvas.Body>
     </Offcanvas>
+  );
+}
+
+/**
+ * Relação com muitas opções no filtro (0.31.0): busca + lista de marcação (antes, um select múltiplo sem busca que
+ * pedia Ctrl/Cmd para marcar mais de um). Os marcados ficam no topo.
+ */
+function ListaComBusca({
+  opcoes,
+  marcados,
+  onChange,
+}: {
+  opcoes: Option[];
+  marcados: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [busca, setBusca] = useState('');
+  const sem = (t: string) =>
+    t
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  const t = sem(busca.trim());
+  const visiveis = opcoes.filter((o) => !t || sem(o.label).includes(t));
+  const ordenadas = [
+    ...visiveis.filter((o) => marcados.includes(String(o.value))),
+    ...visiveis.filter((o) => !marcados.includes(String(o.value))),
+  ];
+  const alternar = (v: string) => onChange(marcados.includes(v) ? marcados.filter((x) => x !== v) : [...marcados, v]);
+  return (
+    <div className="filtro-lista-busca">
+      <Form.Control
+        size="sm"
+        type="search"
+        placeholder="Buscar..."
+        aria-label="Buscar nas opções"
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+        className="mb-1"
+      />
+      <div className="filtro-lista-opcoes">
+        {ordenadas.slice(0, 300).map((o) => (
+          <Form.Check
+            key={o.value}
+            id={`filtro-${o.value}-${o.label}`}
+            label={o.label}
+            checked={marcados.includes(String(o.value))}
+            onChange={() => alternar(String(o.value))}
+          />
+        ))}
+        {!ordenadas.length && <div className="small text-muted">Nada encontrado.</div>}
+      </div>
+      {marcados.length > 0 && (
+        <button type="button" className="btn btn-link btn-sm p-0" onClick={() => onChange([])}>
+          Limpar ({marcados.length})
+        </button>
+      )}
+    </div>
   );
 }

@@ -4,6 +4,7 @@ import MoneyInput from './MoneyInput';
 import NumberInput from './NumberInput';
 import PasswordInput from './PasswordInput';
 import PermissionMatrix from './PermissionMatrix';
+import RelationSelect from './RelationSelect';
 import ImageInput from './ImageInput';
 import { fmtDate } from '../lib/format';
 
@@ -91,15 +92,18 @@ export default function FieldInput({
       break;
     case 'relation':
       input = (
-        <Form.Select value={text} onChange={(e) => set(e.target.value)} {...common}>
-          <option value="">Selecione...</option>
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Form.Select>
+        <RelationSelect
+          id={id}
+          value={text}
+          options={options}
+          onChange={(v) => set(v)}
+          isInvalid={!!error}
+          disabled={isDisabled}
+          required={required}
+          aria-label={bare ? f.label : undefined}
+        />
       );
+      composite = true;
       break;
     case 'money':
       input = (

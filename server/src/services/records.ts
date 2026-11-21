@@ -519,6 +519,8 @@ export async function restoreRecord(c: OpCtx, table: string, ent: EntityDef, id:
   return getRecord(c.db, table, ent, id);
 }
 
+const ORDEM_ALFABETICA = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+
 /**
  * Opções de select (id + nome), com filtros de igualdade (selects dependentes).
  * Sem os inativos (`activeField`), a não ser com ?todos=1 (filtros da listagem).
@@ -547,7 +549,11 @@ export async function relationOptions(
       ? db.from(qb.as('o')).whereIn('id', somenteIds).orderBy('label', 'asc')
       : qb.orderBy(ent.labelField, 'asc')
   ).limit(5000);
-  return rows.map((r) => ({ value: r.id as number, label: String(r.label ?? r.id) }));
+  // ordem alfabética do português (o banco ordena maiúsculas antes de minúsculas e acentos no fim — SQLite — ou
+  // conforme a collation do Postgres): "e-Core" junto de "Eficaz", "Ágil" junto de "Agile"
+  return rows
+    .map((r) => ({ value: r.id as number, label: String(r.label ?? r.id) }))
+    .sort((a, b) => ORDEM_ALFABETICA.compare(a.label, b.label));
 }
 
 /** Esvazia a lixeira de uma entidade agora (botão "Esvaziar lixeira"): apaga de vez, com um log de resumo. */

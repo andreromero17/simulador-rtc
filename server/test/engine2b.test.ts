@@ -122,6 +122,16 @@ describe('selects: inativos e data padrão', () => {
     expect(ids(await ctx.admin.get(`/api/demo_clientes/opcoes?incluir=${inativo.id}`))).toContain(inativo.id);
   });
 
+  it('opções em ordem alfabética do português (sem separar maiúsculas, minúsculas e acentos) — 0.31.0', async () => {
+    const nomes = ['Zeta Ltda', 'e-Core', 'Ágil Tech', 'Agile', 'beta', 'Eficaz', 'item 10', 'item 9'];
+    for (const nome of nomes) await ctx.db('demo_clientes').insert({ nome, ativo: 1 });
+    const labels = ((await ctx.admin.get('/api/demo_clientes/opcoes')).body as { label: string }[])
+      .map((o) => o.label)
+      .filter((l) => nomes.includes(l));
+    expect(labels).toEqual(['Ágil Tech', 'Agile', 'beta', 'e-Core', 'Eficaz', 'item 9', 'item 10', 'Zeta Ltda']);
+    await ctx.db('demo_clientes').whereIn('nome', nomes).del();
+  });
+
   it("data com default 'hoje' é preenchida na criação", async () => {
     const { body } = await ctx.admin.post('/api/demo_orcamentos').send({
       cliente_id: clienteId,
