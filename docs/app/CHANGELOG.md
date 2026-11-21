@@ -3,6 +3,13 @@
 Versões do sistema construído sobre o frame (a versão fica em `shared/src/app/info.ts`).
 As versões do frame estão no `CHANGELOG.md` da raiz.
 
+## 0.2.1 — 2026-11-21
+
+- Receitas e custos sem a importação genérica do frame (que exigia clientes já cadastrados): o botão "Importar
+  planilha" leva à importação do simulador, que cria clientes e fornecedores pelo CNPJ ou pelo nome.
+- Importação aceita arquivo de aba única (ex.: exportação do NetSuite), lido como Receitas ou Custos conforme a escolha
+  na tela; na disputa entre colunas, "Descrição" ganha de "Memorando".
+
 ## 0.2.0 — 2026-11-21
 
 - Empresa ativa: Receitas, Custos e despesas e Clientes/fornecedores mostram só os dados da empresa escolhida no

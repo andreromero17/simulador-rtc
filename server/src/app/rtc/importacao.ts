@@ -46,7 +46,7 @@ const COLUNAS_RECEITA: Record<string, string[]> = {
   nome: ['cliente', 'nomecliente', 'razaosocialcliente', 'razaosocial', 'tomador', 'nometomador'],
   regime: ['regimecliente', 'regime'],
   uf: ['ufcliente', 'uf'],
-  descricao: ['descricao', 'servico', 'descricaodoservico', 'discriminacao'],
+  descricao: ['descricao', 'servico', 'descricaodoservico', 'discriminacao', 'memorando', 'descrucao'],
   item_lc116: [
     'itemlc116',
     'item',
@@ -84,7 +84,7 @@ const COLUNAS_CUSTO: Record<string, string[]> = {
   regime: ['regimefornecedor', 'regime'],
   uf: ['uffornecedor', 'uf'],
   categoria: ['categoria', 'tipo', 'conta', 'natureza', 'classificacao'],
-  descricao: ['descricao', 'historico', 'item'],
+  descricao: ['descricao', 'historico', 'item', 'memorando', 'descrucao'],
   cclasstrib: ['cclasstrib'],
   valor: ['valor', 'valorpago', 'valortotal', 'valorbruto'],
   documento_fiscal: [
@@ -125,6 +125,7 @@ function texto(v: ExcelJS.CellValue): string {
 
 interface Aba {
   nome: 'Receitas' | 'Custos';
+  cabecalho: boolean;
   linhas: { linha: number; dados: Record<string, string> }[];
   ignoradas: string[];
 }
@@ -136,11 +137,17 @@ function lerAba(ws: ExcelJS.Worksheet, nome: Aba['nome'], mapa: Record<string, s
   const ignoradas: string[] = [];
   for (let r = 1; r <= Math.min(ws.rowCount, 15) && !cab; r++) {
     const row = ws.getRow(r);
+    const cabecalhos: Record<number, string> = {};
+    for (let c = 1; c <= ws.columnCount; c++) cabecalhos[c] = norm(texto(row.getCell(c).value));
+    // cada campo fica com a coluna cujo título vem antes na lista de nomes aceitos ("Descrição" ganha de "Memorando")
     const achadas: Record<number, string> = {};
-    for (let c = 1; c <= ws.columnCount; c++) {
-      const h = norm(texto(row.getCell(c).value));
-      const campo = Object.entries(mapa).find(([, aliases]) => aliases.includes(h))?.[0];
-      if (campo && !Object.values(achadas).includes(campo)) achadas[c] = campo;
+    for (const [campo, aliases] of Object.entries(mapa)) {
+      let melhor: { c: number; ordem: number } | null = null;
+      for (const [c, h] of Object.entries(cabecalhos)) {
+        const ordem = aliases.indexOf(h);
+        if (ordem >= 0 && !achadas[Number(c)] && (!melhor || ordem < melhor.ordem)) melhor = { c: Number(c), ordem };
+      }
+      if (melhor) achadas[melhor.c] = campo;
     }
     if (Object.keys(achadas).length >= 2) {
       cab = r;
@@ -151,7 +158,7 @@ function lerAba(ws: ExcelJS.Worksheet, nome: Aba['nome'], mapa: Record<string, s
       }
     }
   }
-  if (!cab) return { nome, linhas: [], ignoradas };
+  if (!cab) return { nome, cabecalho: false, linhas: [], ignoradas };
   const linhas: Aba['linhas'] = [];
   for (let r = cab + 1; r <= ws.rowCount; r++) {
     const row = ws.getRow(r);
@@ -160,10 +167,11 @@ function lerAba(ws: ExcelJS.Worksheet, nome: Aba['nome'], mapa: Record<string, s
     if (Object.values(dados).every((v) => !v)) continue;
     linhas.push({ linha: r, dados });
   }
-  return { nome, linhas, ignoradas };
+  return { nome, cabecalho: true, linhas, ignoradas };
 }
 
-async function lerPasta(buf: Buffer) {
+/** Aba única (sem os nomes Receitas/Custos): lida como `abaUnica` (padrão: Receitas) */
+async function lerPasta(buf: Buffer, abaUnica: Aba['nome'] = 'Receitas') {
   if (!buf.length) throw new HttpError(422, 'Arquivo vazio');
   const wb = new ExcelJS.Workbook();
   try {
@@ -174,14 +182,23 @@ async function lerPasta(buf: Buffer) {
   const acha = (...prefixos: string[]) => wb.worksheets.find((w) => prefixos.some((p) => norm(w.name).startsWith(p)));
   const wsR = acha('receita', 'faturamento', 'vendas');
   const wsC = acha('custo', 'despesa', 'compras', 'pagamento');
-  if (!wsR && !wsC)
-    throw new HttpError(422, 'A planilha precisa de uma aba "Receitas" e/ou uma aba "Custos". Baixe o modelo.');
-  const abas = [wsR && lerAba(wsR, 'Receitas', COLUNAS_RECEITA), wsC && lerAba(wsC, 'Custos', COLUNAS_CUSTO)].filter(
-    Boolean,
-  ) as Aba[];
+  let abas: Aba[];
+  const avisos: string[] = [];
+  if (!wsR && !wsC) {
+    const ws = wb.worksheets.find((w) => w.rowCount > 1) ?? wb.worksheets[0];
+    if (!ws) throw new HttpError(422, 'Planilha vazia');
+    abas = [lerAba(ws, abaUnica, abaUnica === 'Receitas' ? COLUNAS_RECEITA : COLUNAS_CUSTO)];
+    avisos.push(`A aba "${ws.name}" foi lida como ${abaUnica}.`);
+  } else
+    abas = [wsR && lerAba(wsR, 'Receitas', COLUNAS_RECEITA), wsC && lerAba(wsC, 'Custos', COLUNAS_CUSTO)].filter(
+      Boolean,
+    ) as Aba[];
+  for (const a of abas)
+    if (!a.linhas.length && !a.cabecalho)
+      avisos.push(`Não achei o cabeçalho na aba ${a.nome}: use colunas como "Competência", "Cliente", "Valor".`);
   const total = abas.reduce((s, a) => s + a.linhas.length, 0);
   if (total > MAX_LINHAS) throw new HttpError(422, `Limite de ${MAX_LINHAS} linhas por importação`);
-  return abas;
+  return { abas, avisos };
 }
 
 // ---------------------------------------------------------------- conversões
@@ -401,13 +418,20 @@ const vazia = (): PreviaImportacao => ({
   parceirosExistentes: 0,
   categoriasNaoEncontradas: [],
   colunasIgnoradas: [],
+  avisos: [],
   erros: [],
 });
 
-export async function previaImportacao(db: Db, empresaId: number, buf: Buffer): Promise<PreviaImportacao> {
-  const abas = await lerPasta(buf);
+export async function previaImportacao(
+  db: Db,
+  empresaId: number,
+  buf: Buffer,
+  abaUnica?: 'Receitas' | 'Custos',
+): Promise<PreviaImportacao> {
+  const { abas, avisos } = await lerPasta(buf, abaUnica);
   const ctx = await contexto(db, empresaId);
   const previa = vazia();
+  previa.avisos = avisos;
   previa.colunasIgnoradas = abas.flatMap((a) => a.ignoradas);
   preparar(ctx, abas, previa);
   return previa;
@@ -423,9 +447,11 @@ export async function importar(
   buf: Buffer,
   nomeArquivo: string,
   substituir: boolean,
+  abaUnica?: 'Receitas' | 'Custos',
 ): Promise<ResultadoImportacao> {
-  const abas = await lerPasta(buf);
+  const { abas, avisos } = await lerPasta(buf, abaUnica);
   const previa = vazia();
+  previa.avisos = avisos;
   previa.colunasIgnoradas = abas.flatMap((a) => a.ignoradas);
   const entParceiro = getEntity('parceiros')!;
   const entReceita = getEntity('receitas')!;

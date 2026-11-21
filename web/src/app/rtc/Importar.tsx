@@ -37,6 +37,12 @@ function Resumo({ p }: { p: PreviaImportacao }) {
           Categorias não reconhecidas (irão para "Outras despesas"): {p.categoriasNaoEncontradas.join(', ')}
         </Alert>
       )}
+      {p.avisos.map((a) => (
+        <p key={a} className="small mb-2">
+          <i className="bi bi-info-circle me-1" />
+          {a}
+        </p>
+      ))}
       {p.colunasIgnoradas.length > 0 && (
         <p className="small text-muted">Colunas ignoradas: {p.colunasIgnoradas.join(', ')}</p>
       )}
@@ -77,18 +83,19 @@ export default function Importar() {
   const [previa, setPrevia] = useState<PreviaImportacao | null>(null);
   const [resultado, setResultado] = useState<ResultadoImportacao | null>(null);
   const [substituir, setSubstituir] = useState(true);
+  const [abaUnica, setAbaUnica] = useState<'receitas' | 'custos'>('receitas');
   const [ocupado, setOcupado] = useState(false);
   const [consulta, setConsulta] = useState<ResultadoConsultaCnpj | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
-  const escolherArquivo = async (f: File | null) => {
+  const escolherArquivo = async (f: File | null, aba = abaUnica) => {
     setArquivo(f);
     setPrevia(null);
     setResultado(null);
     if (!f || !empresaId) return;
     setOcupado(true);
     try {
-      setPrevia(await api.upload<PreviaImportacao>(`/rtc/importar?empresa_id=${empresaId}&previa=1`, f));
+      setPrevia(await api.upload<PreviaImportacao>(`/rtc/importar?empresa_id=${empresaId}&previa=1&aba=${aba}`, f));
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -101,7 +108,7 @@ export default function Importar() {
     setOcupado(true);
     try {
       const r = await api.upload<ResultadoImportacao>(
-        `/rtc/importar?empresa_id=${empresaId}&substituir=${substituir ? 1 : 0}&nome=${encodeURIComponent(arquivo.name)}`,
+        `/rtc/importar?empresa_id=${empresaId}&substituir=${substituir ? 1 : 0}&aba=${abaUnica}&nome=${encodeURIComponent(arquivo.name)}`,
         arquivo,
       );
       setResultado(r);
@@ -172,6 +179,26 @@ export default function Importar() {
                       accept=".xlsx"
                       onChange={(e) => void escolherArquivo((e.target as HTMLInputElement).files?.[0] ?? null)}
                     />
+                  </Col>
+                  <Col xs={12}>
+                    <Form.Label className="small text-muted d-block mb-1">
+                      Arquivo com uma aba só (sem abas "Receitas" e "Custos") é de:
+                    </Form.Label>
+                    {(['receitas', 'custos'] as const).map((a) => (
+                      <Form.Check
+                        key={a}
+                        inline
+                        type="radio"
+                        id={`aba-${a}`}
+                        name="aba-unica"
+                        label={a === 'receitas' ? 'Receitas (faturamento)' : 'Custos e despesas'}
+                        checked={abaUnica === a}
+                        onChange={() => {
+                          setAbaUnica(a);
+                          if (arquivo) void escolherArquivo(arquivo, a);
+                        }}
+                      />
+                    ))}
                   </Col>
                 </BsRow>
               )}

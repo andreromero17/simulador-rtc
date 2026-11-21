@@ -146,6 +146,67 @@ describe('importação', () => {
     expect((await ctx.admin.get('/api/rtc/parceiros')).status).toBe(422);
   });
 
+  it('arquivo de aba única (exportação do ERP) sem CNPJ: cria clientes pelo nome', async () => {
+    const empresa_id = await empresa();
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Resultado da pesquisa');
+    ws.addRow([
+      'Empresa',
+      'Tipo',
+      'Competência',
+      'Cliente',
+      'Nº da nota',
+      'Valor bruto',
+      'Valor líquido',
+      'Memorando',
+      'Item LC 116',
+      'Exportação de serviço',
+      'Descrição',
+    ]);
+    ws.addRow([
+      'Minha empresa',
+      'Fatura',
+      '2026-04-30',
+      'Iron Mountain',
+      'INV44',
+      41664,
+      40000,
+      'memo',
+      '010101',
+      'Não',
+      'Desenvolvimento de Software',
+    ]);
+    ws.addRow([
+      'Minha empresa',
+      'Fatura',
+      '2026-04-30',
+      'UOL',
+      'INV50',
+      5748.08,
+      5500,
+      '',
+      '1.01',
+      'Não',
+      'Desenvolvimento de Software',
+    ]);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    const url = `/api/rtc/importar?empresa_id=${empresa_id}&aba=receitas`;
+    const previa = await ctx.admin.post(`${url}&previa=1`).set('Content-Type', 'application/octet-stream').send(buf);
+    expect(previa.status, JSON.stringify(previa.body)).toBe(200);
+    expect(previa.body.receitas).toMatchObject({ linhas: 2, validas: 2, total: 47412.08 });
+    expect(previa.body.avisos[0]).toContain('Resultado da pesquisa');
+    expect(previa.body.parceirosNovos).toBe(2);
+    const imp = await ctx.admin.post(url).set('Content-Type', 'application/octet-stream').send(buf);
+    expect(imp.body.importadas).toMatchObject({ receitas: 2, parceiros: 2 });
+    const r = await ctx.db('receitas').where({ empresa_id, documento_fiscal: 'INV44' }).first();
+    // "Descrição" ganha de "Memorando"; o código nacional 010101 vira o item 1.01
+    expect(r).toMatchObject({
+      descricao: 'Desenvolvimento de Software',
+      item_lc116: '1.01',
+      competencia: '2026-04-01',
+    });
+  });
+
   it('modelo e permissões', async () => {
     const m = await ctx.admin
       .get('/api/rtc/importar/modelo')

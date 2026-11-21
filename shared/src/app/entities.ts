@@ -228,6 +228,8 @@ export const appEntities: Record<string, EntityDef> = {
     labelField: 'descricao',
     group: 'Simulação',
     lixeira: true,
+    // a importação é a do simulador (tela Importar planilhas), que cria clientes e fornecedores pelo CNPJ
+    importar: false,
     periodField: 'competencia',
     defaultSort: { field: 'competencia', dir: 'desc' },
     pageSizes: [25, 50, 100, 500],
@@ -327,6 +329,8 @@ export const appEntities: Record<string, EntityDef> = {
     labelField: 'descricao',
     group: 'Simulação',
     lixeira: true,
+    // a importação é a do simulador (tela Importar planilhas), que cria clientes e fornecedores pelo CNPJ
+    importar: false,
     periodField: 'competencia',
     defaultSort: { field: 'competencia', dir: 'desc' },
     pageSizes: [25, 50, 100, 500],

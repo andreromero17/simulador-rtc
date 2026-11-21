@@ -18,6 +18,8 @@ export interface PreviaImportacao {
   parceirosExistentes: number;
   categoriasNaoEncontradas: string[];
   colunasIgnoradas: string[];
+  /** Observações da leitura (ex.: aba única lida como Receitas) */
+  avisos: string[];
   erros: { aba: string; linha: number; erro: string }[];
 }
 

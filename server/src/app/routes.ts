@@ -16,7 +16,8 @@ import { rodarSimulacao } from './rtc/simulacao';
  *   GET  /api/rtc/catalogo?q=                 busca no catálogo oficial LC 116 → NBS → cClassTrib
  *   GET  /api/rtc/cclasstrib                  tabela de cClassTrib (com reduções)
  *   GET  /api/rtc/importar/modelo             planilha modelo (.xlsx)
- *   POST /api/rtc/importar?empresa_id=&previa=1&substituir=1   corpo = arquivo .xlsx
+ *   POST /api/rtc/importar?empresa_id=&previa=1&substituir=1&aba=receitas|custos   corpo = arquivo .xlsx
+ *        (aba = como ler um arquivo de aba única, sem abas Receitas/Custos)
  *   GET  /api/rtc/parceiros?empresa_id=        clientes e fornecedores da empresa, com totais de 2026
  *   POST /api/rtc/parceiros/consultar         { ids?: number[] } consulta CNPJs (regime Simples/MEI)
  */
@@ -82,13 +83,14 @@ export function appRouter(db: Db) {
       const empresaId = Number(req.query.empresa_id);
       if (!empresaId) throw badRequest('Escolha a empresa');
       const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      const aba = req.query.aba === 'custos' ? 'Custos' : 'Receitas';
       if (req.query.previa === '1') {
-        res.json(await previaImportacao(db, empresaId, buf));
+        res.json(await previaImportacao(db, empresaId, buf, aba));
         return;
       }
       const nome = String(req.query.nome ?? 'planilha.xlsx').slice(0, 120);
       res.json(
-        await importar({ db, user: userOf(req), ip: req.ip }, empresaId, buf, nome, req.query.substituir === '1'),
+        await importar({ db, user: userOf(req), ip: req.ip }, empresaId, buf, nome, req.query.substituir === '1', aba),
       );
     },
   );
