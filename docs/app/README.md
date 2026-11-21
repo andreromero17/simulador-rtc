@@ -10,6 +10,10 @@ npm run setup        # instala, migra e cria 5 empresas de exemplo com 2026 comp
 npm run dev          # http://localhost:5173  (admin@sistema.com / admin123)
 ```
 
+## Colocar no ar
+
+AWS Lightsail: passo a passo em [`DEPLOY-LIGHTSAIL.md`](DEPLOY-LIGHTSAIL.md).
+
 ## Uso
 
 1. **Empresas** → regime, alíquota de ISS do município, cClassTrib padrão e, no Simples, anexo (ou fator R) e opção
