@@ -18,7 +18,9 @@ import {
   ANOS_SIMULACAO,
   PIS_COFINS,
   contribuinteRegular,
+  pisCofinsDaEmpresa,
   regrasDoAno,
+  type PisCofinsEmpresa,
   type AliquotasReferencia,
   type RegimeEmpresa,
   type RegrasAno,
@@ -36,6 +38,10 @@ export interface EmpresaMotor {
   opcaoSimples?: string | null;
   /** Receita bruta 12 meses; vazio = calculada dos dados (anualizada) */
   rbt12?: number | null;
+  /** PIS/Cofins de hoje: regime (Conforme o regime / Cumulativo / Não cumulativo) e alíquotas (%) — vazio = padrão */
+  regimePisCofins?: string | null;
+  aliquotaPis?: number | null;
+  aliquotaCofins?: number | null;
 }
 
 export interface ReceitaMotor {
@@ -201,6 +207,7 @@ const zeroTributos = (): Tributos => ({
 });
 const CONSUMO_SN: TributoSN[] = ['pis', 'cofins', 'iss', 'cbs', 'ibs'];
 const r2 = (v: number) => Math.round(v * 100) / 100;
+const fmtPct = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}%`;
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 function somaTributos(a: Tributos, b: Partial<Tributos>) {
@@ -233,6 +240,7 @@ export function simular(entrada: EntradaSimulacao): ResultadoSimulacao {
   const simples = ehSimples(empresa.regime);
   const fatorR = rbt12 > 0 ? folha12 / rbt12 : null;
   const anexo = simples ? anexoDaEmpresa(empresa.anexoSimples, fatorR) : null;
+  const pisCofins = pisCofinsDaEmpresa(empresa);
 
   if (meses < 12)
     alertas.push(
@@ -248,6 +256,14 @@ export function simular(entrada: EntradaSimulacao): ResultadoSimulacao {
       `Fator R de ${((fatorR ?? 0) * 100).toFixed(1).replace('.', ',')}% → Anexo ${anexo}` +
         (anexo === 'V' ? ' (abaixo de 28%).' : ' (28% ou mais).'),
     );
+  if (!simples && pisCofins.personalizado)
+    alertas.push(
+      `PIS/Cofins de hoje informado na empresa: ${pisCofins.naoCumulativo ? 'não cumulativo' : 'cumulativo'}, ` +
+        `PIS ${fmtPct(pisCofins.pis)} + Cofins ${fmtPct(pisCofins.cofins)}` +
+        (pisCofins.naoCumulativo ? ' (com crédito sobre os insumos).' : ' (sem crédito sobre os custos).'),
+    );
+  if (!simples && empresa.regime === 'Lucro Presumido' && empresa.regimePisCofins === 'Não cumulativo')
+    alertas.push('Lucro Presumido é sempre cumulativo no PIS/Cofins: a opção "Não cumulativo" foi ignorada.');
   if (receitas.some((r) => r.clienteRegime === 'Órgão público'))
     alertas.push(
       'Há receitas de órgãos públicos: o redutor das compras governamentais (a ser fixado pelo Senado) não foi aplicado.',
@@ -260,7 +276,7 @@ export function simular(entrada: EntradaSimulacao): ResultadoSimulacao {
 
   const anos = [ANO_BASE, ...(entrada.anos ?? ANOS_SIMULACAO)];
   const resultados = anos.map((ano) =>
-    simularAno(ano, { empresa, receitas, custos, prem, rbt12, anexo, cenario: entrada.cenario }),
+    simularAno(ano, { empresa, receitas, custos, prem, rbt12, anexo, pisCofins, cenario: entrada.cenario }),
   );
 
   const saldoCredor = resultados.find((a) => a.tributosConsumo < 0);
@@ -292,6 +308,7 @@ interface Ctx {
   prem: Premissas;
   rbt12: number;
   anexo: AnexoServico | null;
+  pisCofins: PisCofinsEmpresa;
   cenario: AliquotasReferencia[];
 }
 
@@ -305,12 +322,12 @@ function tributosHojeDaLinha(r: ReceitaMotor, ctx: Ctx, das2026: ResultadoDas | 
     const fora = das2026.acimaSublimite && !r.exportacao ? g * iss : 0;
     return (g * (das2026.aliquotaEfetiva - exclui)) / 100 + fora;
   }
-  const pc = ctx.empresa.regime === 'Lucro Real' ? PIS_COFINS.naoCumulativo : PIS_COFINS.cumulativo;
+  const pc = ctx.pisCofins;
   return r.exportacao ? 0 : g * ((pc.pis + pc.cofins) / 100 + iss);
 }
 
 function simularAno(ano: number, ctx: Ctx): ResultadoAno {
-  const { empresa, receitas, custos, prem, rbt12, anexo } = ctx;
+  const { empresa, receitas, custos, prem, rbt12, anexo, pisCofins } = ctx;
   const regras = regrasDoAno(
     ano,
     ctx.cenario.find((c) => c.ano === ano),
@@ -328,7 +345,7 @@ function simularAno(ano: number, ctx: Ctx): ResultadoAno {
         ? `Simples híbrido — Anexo ${anexo}`
         : `Simples puro — Anexo ${anexo}`
     : atual
-      ? `${empresa.regime} — PIS/Cofins ${empresa.regime === 'Lucro Real' ? 'não cumulativo' : 'cumulativo'} + ISS`
+      ? `${empresa.regime} — PIS/Cofins ${pisCofins.naoCumulativo ? 'não cumulativo' : 'cumulativo'} + ISS`
       : `${empresa.regime} — regime regular de IBS/CBS`;
 
   const debitos = zeroTributos();
@@ -366,7 +383,7 @@ function simularAno(ano: number, ctx: Ctx): ResultadoAno {
         t.dasOutros = t.das - t.dasConsumo;
         if (das.acimaSublimite) t.iss = g * issCheio;
       } else {
-        const pc = empresa.regime === 'Lucro Real' ? PIS_COFINS.naoCumulativo : PIS_COFINS.cumulativo;
+        const pc = pisCofins;
         if (!r.exportacao) {
           t.pis = (g * pc.pis) / 100;
           t.cofins = (g * pc.cofins) / 100;
@@ -485,8 +502,9 @@ function simularAno(ano: number, ctx: Ctx): ResultadoAno {
     let cIbs = 0;
     const forn = cu.fornecedorRegime;
     if (atual) {
-      if (empresa.regime === 'Lucro Real' && cu.creditaPisCofins && forn !== 'Pessoa física' && forn !== 'Exterior')
-        cPis = v * PIS_COFINS_NC;
+      // crédito só no não cumulativo, à alíquota da empresa
+      if (!simples && pisCofins.naoCumulativo && cu.creditaPisCofins && forn !== 'Pessoa física' && forn !== 'Exterior')
+        cPis = (v * (pisCofins.pis + pisCofins.cofins)) / 100;
     } else if (regular && cu.creditaIbsCbs) {
       if (contribuinteRegular(forn)) {
         // fornecedor mantém o preço total: o IBS/CBS sai de dentro do valor pago

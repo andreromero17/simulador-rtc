@@ -4,10 +4,12 @@
 import type { Migration } from '../../db/migrator';
 import * as m20261121171008 from './20261121171008_simulador_rtc';
 import * as m20261121171009 from './20261121171009_dados_referencia';
+import * as m20261121184754 from './20261121184754_pis_cofins_empresa';
 // @diff:imports
 
 export const appMigrations: Migration[] = [
   m20261121171008,
   m20261121171009,
+  m20261121184754,
   // @diff:list
 ];

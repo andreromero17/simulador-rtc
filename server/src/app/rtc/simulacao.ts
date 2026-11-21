@@ -143,6 +143,10 @@ export async function rodarSimulacao(db: Db, pedido: PedidoSimulacao): Promise<R
       anexoSimples: (empresa.anexo_simples as string) ?? null,
       opcaoSimples,
       rbt12: empresa.rbt12 == null ? null : Number(empresa.rbt12),
+      regimePisCofins: (empresa.regime_pis_cofins as string) ?? null,
+      aliquotaPis: empresa.aliquota_pis == null || empresa.aliquota_pis === '' ? null : Number(empresa.aliquota_pis),
+      aliquotaCofins:
+        empresa.aliquota_cofins == null || empresa.aliquota_cofins === '' ? null : Number(empresa.aliquota_cofins),
     },
     receitas,
     custos,

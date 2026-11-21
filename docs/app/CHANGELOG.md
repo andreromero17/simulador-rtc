@@ -3,6 +3,12 @@
 Versões do sistema construído sobre o frame (a versão fica em `shared/src/app/info.ts`).
 As versões do frame estão no `CHANGELOG.md` da raiz.
 
+## 0.3.0 — 2026-11-21
+
+- PIS/Cofins de hoje parametrizável na empresa: regime (conforme o regime / cumulativo / não cumulativo) e alíquotas de
+  PIS e Cofins (vazio = padrão). Cobre o Lucro Real com receita de TI no cumulativo e benefícios de alíquota reduzida;
+  o crédito sobre insumos só existe no não cumulativo e usa a alíquota da empresa. Migração `pis_cofins_empresa`.
+
 ## 0.2.1 — 2026-11-21
 
 - Receitas e custos sem a importação genérica do frame (que exigia clientes já cadastrados): o botão "Importar

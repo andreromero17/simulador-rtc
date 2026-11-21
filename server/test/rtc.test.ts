@@ -248,6 +248,15 @@ describe('simulação', () => {
     expect(a2027.receitaLiquida - cred).toBeCloseTo(a2026.receitaLiquida, -1);
   });
 
+  it('usa o PIS/Cofins informado na empresa', async () => {
+    const empresa_id = await empresa({ regime: 'Lucro Real', regime_pis_cofins: 'Cumulativo', aliquota_cofins: 2 });
+    await ctx.admin
+      .post('/api/receitas')
+      .send({ empresa_id, competencia: '2026-01-01', descricao: 'Software', item_lc116: '1.01', valor: 10000 });
+    const r = await ctx.admin.get(`/api/rtc/simulacao?empresa_id=${empresa_id}`);
+    expect(r.body.resultado.anos[0].debitos).toMatchObject({ pis: 65, cofins: 200 });
+  });
+
   it('valida parâmetros', async () => {
     expect((await ctx.admin.get('/api/rtc/simulacao')).status).toBe(422);
     expect((await ctx.admin.get('/api/rtc/simulacao?empresa_id=99999')).status).toBe(404);

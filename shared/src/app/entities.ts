@@ -11,7 +11,13 @@
 // Depois de editar: npm run db:diff -- descricao  →  npm run db:migrate
 // =============================================================================
 import type { EntityDef } from '../types';
-import { ANEXOS_SIMPLES, OPCOES_SIMPLES, REGIMES_EMPRESA, REGIMES_PARCEIRO } from './rtc/parametros';
+import {
+  ANEXOS_SIMPLES,
+  OPCOES_SIMPLES,
+  REGIMES_EMPRESA,
+  REGIMES_PARCEIRO,
+  REGIMES_PIS_COFINS,
+} from './rtc/parametros';
 
 const CORES_REGIME: Record<string, string> = {
   'Simples Nacional': '#2b8a5a',
@@ -104,6 +110,36 @@ export const appEntities: Record<string, EntityDef> = {
         col: 4,
         section: 'Tributação',
         help: '000001 = tributação integral; 200052 = profissões intelectuais (−30%); 200029 = saúde (−60%)…',
+      },
+      {
+        name: 'regime_pis_cofins',
+        label: 'Regime do PIS/Cofins',
+        type: 'select',
+        options: REGIMES_PIS_COFINS,
+        default: 'Conforme o regime',
+        col: 4,
+        section: 'PIS/Cofins hoje (Presumido e Real)',
+        help: 'Presumido é sempre cumulativo. No Real, receitas de TI podem ficar no cumulativo (sem crédito).',
+      },
+      {
+        name: 'aliquota_pis',
+        label: 'Alíquota de PIS',
+        type: 'percent',
+        min: 0,
+        max: 10,
+        col: 4,
+        section: 'PIS/Cofins hoje (Presumido e Real)',
+        help: 'Vazio = 0,65% (cumulativo) ou 1,65% (não cumulativo).',
+      },
+      {
+        name: 'aliquota_cofins',
+        label: 'Alíquota de Cofins',
+        type: 'percent',
+        min: 0,
+        max: 20,
+        col: 4,
+        section: 'PIS/Cofins hoje (Presumido e Real)',
+        help: 'Vazio = 3% (cumulativo) ou 7,6% (não cumulativo). Use para benefícios de alíquota reduzida.',
       },
       {
         name: 'anexo_simples',

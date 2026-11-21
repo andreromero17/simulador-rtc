@@ -196,6 +196,51 @@ describe('Lucro Real', () => {
   });
 });
 
+describe('PIS/Cofins parametrizado na empresa', () => {
+  it('Lucro Real com receita de TI no cumulativo: 3,65% e sem crédito sobre os custos', () => {
+    const r = simular({
+      empresa: { regime: 'Lucro Real', aliquotaIss: 2, regimePisCofins: 'Cumulativo' },
+      receitas: [receita(100_000)],
+      custos: [custo(20_000)],
+      cenario: SERT,
+    });
+    const a = r.anos[0]!;
+    expect(a.debitos.pis).toBeCloseTo(650, 6);
+    expect(a.debitos.cofins).toBeCloseTo(3_000, 6);
+    expect(a.creditos.pisCofins).toBe(0);
+    expect(a.modo).toContain('cumulativo');
+    expect(r.alertas.some((x) => x.includes('PIS/Cofins de hoje informado'))).toBe(true);
+  });
+
+  it('alíquotas reduzidas informadas valem no débito, no crédito e na receita líquida mantida', () => {
+    const r = simular({
+      empresa: { regime: 'Lucro Real', aliquotaIss: 5, aliquotaPis: 0.5, aliquotaCofins: 2 },
+      receitas: [receita(100_000)],
+      custos: [custo(10_000)],
+      cenario: SERT,
+      premissas: { estrategiaPreco: 'liquido' },
+    });
+    const hoje = r.anos[0]!;
+    expect(hoje.debitos.pis + hoje.debitos.cofins).toBeCloseTo(2_500, 6);
+    expect(hoje.creditos.pisCofins).toBeCloseTo(250, 6); // 10.000 × 2,5%
+    // receita líquida das vendas mantida: 100.000 − 2.500 − 5.000
+    const a27 = r.anos[1]!;
+    expect((a27.debitos.iss / 0.05) * 0.95).toBeCloseTo(92_500, 0);
+  });
+
+  it('Lucro Presumido ignora "não cumulativo"', () => {
+    const r = simular({
+      empresa: { regime: 'Lucro Presumido', aliquotaIss: 5, regimePisCofins: 'Não cumulativo' },
+      receitas: [receita(100_000)],
+      custos: [custo(10_000)],
+      cenario: SERT,
+    });
+    expect(r.anos[0]!.debitos.pis).toBe(650);
+    expect(r.anos[0]!.creditos.pisCofins).toBe(0);
+    expect(r.alertas.some((x) => x.includes('sempre cumulativo'))).toBe(true);
+  });
+});
+
 describe('Simples Nacional', () => {
   const base = (opcao: string, regime = 'Lucro Real') =>
     simular({

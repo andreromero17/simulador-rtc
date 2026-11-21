@@ -28,6 +28,8 @@ referência por ano). Categorias e cenários vêm na migração `20261121171009_
 - 2027–2028: CBS = referência − 0,1 p.p., IBS 0,1%. 2029–2032: ISS × 0,9/0,8/0,7/0,6 e IBS × 0,1/0,2/0,3/0,4.
   2033: só IBS/CBS. 2026 (teste compensável) = sistema atual.
 - Reduções pelo cClassTrib da receita (hook `receitas` sugere pelo NBS/item da LC 116 e o padrão da empresa).
+- PIS/Cofins de hoje: padrão do regime (Presumido 0,65%+3% cumulativo; Real 1,65%+7,6% não cumulativo com crédito),
+  ou regime e alíquotas informados na empresa (`pisCofinsDaEmpresa`). Crédito de PIS/Cofins só no não cumulativo.
 - Duas estratégias de preço: `preco` (cliente paga o mesmo total) e `liquido` (empresa mantém a receita líquida).
 - Créditos: fornecedor do regime regular → IBS/CBS embutido no preço pago (fornecedor mantém o preço); fornecedor do
   Simples → parcela CBS/IBS do DAS de um fornecedor típico (Anexo III, RBT12 R$ 500 mil, premissa).

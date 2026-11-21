@@ -12,6 +12,43 @@ export const PIS_COFINS = {
   naoCumulativo: { pis: 1.65, cofins: 7.6 },
 } as const;
 
+export const REGIMES_PIS_COFINS = ['Conforme o regime', 'Cumulativo', 'Não cumulativo'] as const;
+
+export interface PisCofinsEmpresa {
+  pis: number;
+  cofins: number;
+  /** Não cumulativo: débito sobre a receita e crédito sobre os insumos */
+  naoCumulativo: boolean;
+  /** Alíquotas ou regime diferentes do padrão do regime tributário */
+  personalizado: boolean;
+}
+
+/**
+ * PIS/Cofins de hoje da empresa. Padrão: Lucro Presumido = cumulativo (0,65% + 3%); Lucro Real = não cumulativo
+ * (1,65% + 7,6%). A empresa pode informar o regime (ex.: Lucro Real com receita de TI no cumulativo) e as alíquotas
+ * (ex.: benefício de alíquota reduzida). Lucro Presumido é sempre cumulativo.
+ */
+export function pisCofinsDaEmpresa(e: {
+  regime: string;
+  regimePisCofins?: string | null;
+  aliquotaPis?: number | null;
+  aliquotaCofins?: number | null;
+}): PisCofinsEmpresa {
+  const pedido = e.regimePisCofins;
+  const naoCumulativo = e.regime === 'Lucro Real' ? pedido !== 'Cumulativo' : false;
+  const padrao = naoCumulativo ? PIS_COFINS.naoCumulativo : PIS_COFINS.cumulativo;
+  const num = (v: number | null | undefined) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+  const pis = num(e.aliquotaPis) ?? padrao.pis;
+  const cofins = num(e.aliquotaCofins) ?? padrao.cofins;
+  return {
+    pis,
+    cofins,
+    naoCumulativo,
+    personalizado:
+      pis !== padrao.pis || cofins !== padrao.cofins || (e.regime === 'Lucro Real' && pedido === 'Cumulativo'),
+  };
+}
+
 export const REGIMES_EMPRESA = ['Simples Nacional', 'Lucro Presumido', 'Lucro Real'] as const;
 export type RegimeEmpresa = (typeof REGIMES_EMPRESA)[number];
 
