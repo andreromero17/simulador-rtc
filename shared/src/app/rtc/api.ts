@@ -59,6 +59,8 @@ export interface ParceiroDaEmpresa {
   documento: string | null;
   tipo: string;
   regime: string;
+  /** De onde veio o regime (consulta, inferência, planilha, à mão) */
+  regimeFonte: string | null;
   uf: string | null;
   /** Já passou pela consulta de CNPJ */
   consultado: boolean;

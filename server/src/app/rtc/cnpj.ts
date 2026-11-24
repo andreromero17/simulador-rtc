@@ -17,31 +17,74 @@ function fontes() {
   return env.length ? env : FONTES_PADRAO;
 }
 
+type Busca = (url: string) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+
 export interface DadosCnpj {
   nome: string | null;
   uf: string | null;
   municipio: string | null;
   cnae: string | null;
-  regime: 'Simples Nacional' | 'MEI' | 'Regime normal (não identificado)';
+  regime: 'Simples Nacional' | 'MEI' | 'Lucro Real' | 'Órgão público' | 'Regime normal (não identificado)';
+  /** De onde veio o regime (mostrado no cadastro) */
+  fonte: string;
   situacao: string | null;
 }
 
-type Busca = (url: string) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+/** Capital social a partir do qual a empresa é tratada como provável Lucro Real */
+export const CAPITAL_PROVAVEL_LUCRO_REAL = 50_000_000;
 
-/** Converte a resposta (formato BrasilAPI/Minha Receita) */
+/**
+ * Converte a resposta (formato BrasilAPI/Minha Receita). A base pública mostra Simples e MEI; Lucro Real × Presumido
+ * não é público, então o regime é inferido quando há um sinal forte:
+ *  • administração pública (natureza jurídica 1xxx) → Órgão público;
+ *  • S.A. de capital aberto (2046) → Lucro Real;
+ *  • bancos, cooperativas de crédito, seguradoras e afins (CNAE 64 e 65) → Lucro Real (obrigatório por lei);
+ *  • capital social a partir de R$ 50 milhões → Lucro Real (provável).
+ */
 export function interpretar(j: Record<string, unknown>): DadosCnpj {
   const simples = j.opcao_pelo_simples === true || j.opcao_pelo_simples === 'S';
   const mei = j.opcao_pelo_mei === true || j.opcao_pelo_mei === 'S';
-  const cnaeCod = j.cnae_fiscal ? String(j.cnae_fiscal) : null;
+  const cnaeCod = j.cnae_fiscal ? String(j.cnae_fiscal).padStart(7, '0') : null;
   const cnaeDesc = (j.cnae_fiscal_descricao as string) ?? null;
+  const natureza = Number(j.codigo_natureza_juridica ?? 0);
+  const capital = Number(j.capital_social ?? 0) || 0;
+  const divisao = cnaeCod ? Number(cnaeCod.slice(0, 2)) : 0;
+  const situacao = (j.descricao_situacao_cadastral as string) ?? null;
+
+  let regime: DadosCnpj['regime'];
+  let fonte: string;
+  if (mei) [regime, fonte] = ['MEI', 'Consulta do CNPJ: optante pelo MEI'];
+  else if (simples) [regime, fonte] = ['Simples Nacional', 'Consulta do CNPJ: optante pelo Simples Nacional'];
+  else if (natureza >= 1000 && natureza < 2000)
+    [regime, fonte] = ['Órgão público', 'Consulta do CNPJ: administração pública'];
+  else if (natureza === 2046) [regime, fonte] = ['Lucro Real', 'Inferido: S.A. de capital aberto'];
+  else if (divisao === 64 || divisao === 65)
+    [regime, fonte] = ['Lucro Real', 'Inferido: instituição financeira ou seguradora (Lucro Real obrigatório)'];
+  else if (capital >= CAPITAL_PROVAVEL_LUCRO_REAL)
+    [regime, fonte] = ['Lucro Real', 'Inferido: capital social acima de R$ 50 milhões (provável Lucro Real)'];
+  else
+    [regime, fonte] = [
+      'Regime normal (não identificado)',
+      'Consulta do CNPJ: fora do Simples; Lucro Real ou Presumido não é público',
+    ];
+  if (situacao && situacao.toUpperCase() !== 'ATIVA') fonte += ` · situação cadastral: ${situacao}`;
   return {
     nome: (j.razao_social as string) ?? null,
     uf: (j.uf as string) ?? null,
     municipio: (j.municipio as string) ?? null,
     cnae: cnaeCod ? `${cnaeCod}${cnaeDesc ? ` — ${cnaeDesc}` : ''}`.slice(0, 200) : null,
-    regime: mei ? 'MEI' : simples ? 'Simples Nacional' : 'Regime normal (não identificado)',
-    situacao: (j.descricao_situacao_cadastral as string) ?? null,
+    regime,
+    fonte: fonte.slice(0, 120),
+    situacao,
   };
+}
+
+/** Regime definido por alguém (à mão ou na planilha): a consulta não troca */
+export function regimeManual(p: { regime?: unknown; regime_fonte?: unknown }) {
+  const fonte = String(p.regime_fonte ?? '');
+  if (fonte.startsWith('Informado')) return true;
+  // cadastros antigos, sem origem: Real/Presumido/Órgão público só podiam ter vindo de alguém
+  return !fonte && ['Lucro Real', 'Lucro Presumido', 'Órgão público'].includes(String(p.regime ?? ''));
 }
 
 export async function consultarCnpj(cnpj: string, busca: Busca = fetchComPrazo): Promise<DadosCnpj | null> {
@@ -81,10 +124,10 @@ export async function atualizarParceiros(
   db: Db,
   opts: { ids?: number[]; limite?: number; intervaloMs?: number; busca?: Busca } = {},
 ): Promise<ResultadoConsulta> {
-  const limite = Math.min(opts.limite ?? 30, 100);
+  const limite = Math.min(opts.limite ?? (opts.ids?.length ? 100 : 30), 100);
   const base = db('parceiros').whereNull('excluido_em').whereNotNull('documento');
   const q = opts.ids?.length ? base.clone().whereIn('id', opts.ids) : base.clone().whereNull('consultado_em');
-  const todos = (await q.select('id', 'documento', 'regime', 'nome', 'uf', 'municipio')).filter(
+  const todos = (await q.select('id', 'documento', 'regime', 'regime_fonte', 'nome', 'uf', 'municipio')).filter(
     (p) => onlyDigits(p.documento).length === 14,
   );
   const lote = todos.slice(0, limite);
@@ -110,12 +153,15 @@ export async function atualizarParceiros(
       await db('parceiros').where({ id: p.id }).update({ consultado_em: nowLocal() });
       continue;
     }
-    const manual = p.regime === 'Lucro Real' || p.regime === 'Lucro Presumido' || p.regime === 'Órgão público';
-    const regime = dados.regime !== 'Regime normal (não identificado)' || !manual ? dados.regime : p.regime;
+    // regime informado à mão ou na planilha não é trocado pela consulta, exceto quando a base pública mostra
+    // Simples/MEI (fato cadastral, não inferência)
+    const fato = dados.regime === 'Simples Nacional' || dados.regime === 'MEI';
+    const manter = regimeManual(p) && !fato;
     await db('parceiros')
       .where({ id: p.id })
       .update({
-        regime,
+        regime: manter ? p.regime : dados.regime,
+        regime_fonte: manter ? p.regime_fonte || 'Informado à mão' : dados.fonte,
         uf: p.uf || dados.uf,
         municipio: p.municipio || dados.municipio,
         cnae: dados.cnae,

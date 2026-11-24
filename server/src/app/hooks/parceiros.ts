@@ -15,7 +15,13 @@ export const parceirosHooks: EntityHooks = {
         .first('nome');
       if (outro) throw conflict(`Já existe um cadastro com este documento: ${outro.nome}`);
     }
+    // regime escolhido no formulário = informado à mão (a consulta de CNPJ não troca mais)
+    if ('regime' in data && data.regime !== ctx.current?.regime && data.regime !== 'Não informado')
+      data.regime_fonte = 'Informado à mão';
     const regime = data.regime ?? ctx.current?.regime;
-    if ((!regime || regime === 'Não informado') && doc && onlyDigits(doc).length === 11) data.regime = 'Pessoa física';
+    if ((!regime || regime === 'Não informado') && doc && onlyDigits(doc).length === 11) {
+      data.regime = 'Pessoa física';
+      data.regime_fonte = 'Inferido: CPF (pessoa física)';
+    }
   },
 };

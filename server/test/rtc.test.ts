@@ -298,6 +298,60 @@ describe('simulação', () => {
   });
 });
 
+describe('inferência do regime pela consulta de CNPJ', () => {
+  it('Simples/MEI, órgão público, S.A. aberta, financeira e capital alto', () => {
+    expect(interpretar({ codigo_natureza_juridica: 1031 }).regime).toBe('Órgão público');
+    expect(interpretar({ codigo_natureza_juridica: 2046, capital_social: 1000 })).toMatchObject({
+      regime: 'Lucro Real',
+      fonte: 'Inferido: S.A. de capital aberto',
+    });
+    // cooperativa de crédito (CNAE 6424-7/03)
+    expect(interpretar({ codigo_natureza_juridica: 2143, cnae_fiscal: 6424703 }).regime).toBe('Lucro Real');
+    expect(interpretar({ codigo_natureza_juridica: 2062, capital_social: 80_000_000 }).regime).toBe('Lucro Real');
+    expect(
+      interpretar({ codigo_natureza_juridica: 2062, capital_social: 1_000_000, cnae_fiscal: 6201501 }).regime,
+    ).toBe('Regime normal (não identificado)');
+    // Simples vence a inferência
+    expect(interpretar({ opcao_pelo_simples: true, capital_social: 80_000_000 }).regime).toBe('Simples Nacional');
+    expect(interpretar({ descricao_situacao_cadastral: 'BAIXADA' }).fonte).toContain('BAIXADA');
+  });
+
+  it('regime informado à mão é mantido; inferido é atualizado', async () => {
+    const [a] = await ctx
+      .db('parceiros')
+      .insert({ nome: 'Manual', documento: '33.000.167/0001-01', tipo: 'Cliente', regime: 'Não informado' })
+      .returning('id');
+    const idManual = typeof a === 'object' ? a.id : a;
+    // edição no formulário marca a origem
+    const ed = await ctx.admin
+      .put(`/api/parceiros/${idManual}`)
+      .send({ nome: 'Manual', tipo: 'Cliente', regime: 'Lucro Presumido' });
+    expect(ed.status, JSON.stringify(ed.body)).toBe(200);
+    expect((await ctx.db('parceiros').where({ id: idManual }).first()).regime_fonte).toBe('Informado à mão');
+
+    const [b] = await ctx
+      .db('parceiros')
+      .insert({
+        nome: 'Inferido',
+        documento: '60.746.948/0001-12',
+        tipo: 'Cliente',
+        regime: 'Regime normal (não identificado)',
+      })
+      .returning('id');
+    const idInferido = typeof b === 'object' ? b.id : b;
+    const busca = async () => ({ ok: true, status: 200, json: async () => ({ codigo_natureza_juridica: 2046 }) });
+    await atualizarParceiros(ctx.db, { ids: [idManual, idInferido], busca, intervaloMs: 0 });
+    expect(await ctx.db('parceiros').where({ id: idManual }).first()).toMatchObject({
+      regime: 'Lucro Presumido',
+      regime_fonte: 'Informado à mão',
+    });
+    expect(await ctx.db('parceiros').where({ id: idInferido }).first()).toMatchObject({
+      regime: 'Lucro Real',
+      regime_fonte: 'Inferido: S.A. de capital aberto',
+    });
+  });
+});
+
 describe('consulta de CNPJ', () => {
   it('interpreta Simples/MEI e atualiza o regime', async () => {
     expect(interpretar({ opcao_pelo_simples: true, razao_social: 'X' }).regime).toBe('Simples Nacional');

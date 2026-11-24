@@ -3,6 +3,15 @@
 Versões do sistema construído sobre o frame (a versão fica em `shared/src/app/info.ts`).
 As versões do frame estão no `CHANGELOG.md` da raiz.
 
+## 0.4.0 — 2026-11-23
+
+- Consulta de CNPJ infere o regime quando há sinal forte: administração pública → Órgão público; S.A. de capital
+  aberto, instituição financeira/seguradora (CNAE 64/65) e capital social a partir de R$ 50 milhões → Lucro Real.
+  Nova coluna `parceiros.regime_fonte` mostra a origem (consulta, inferência, planilha ou à mão); regime informado à
+  mão ou na planilha não é trocado pela consulta (salvo Simples/MEI). Botão "Consultar de novo".
+- Receitas e custos mostram o CNPJ/CPF e o regime do cliente/fornecedor na listagem; a coluna Empresa saiu (a tela já
+  filtra pela empresa ativa).
+
 ## 0.3.1 — 2026-11-21
 
 - Importação: reimportar com o CNPJ/CPF completa o cliente/fornecedor que foi criado antes só pelo nome (sem duplicar)

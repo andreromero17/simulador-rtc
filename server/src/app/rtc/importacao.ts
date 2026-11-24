@@ -543,7 +543,10 @@ export async function importar(
           importadas.parceirosCompletados++;
         }
         // regime vindo da planilha preenche quem ainda está "Não informado" (nunca troca um regime já definido)
-        if (p.regime && achado.regime === 'Não informado') mudar.regime = achado.regime = p.regime;
+        if (p.regime && achado.regime === 'Não informado') {
+          mudar.regime = achado.regime = p.regime;
+          mudar.regime_fonte = 'Informado na planilha';
+        }
         if (Object.keys(mudar).length) {
           if (mudar.tipo) achado.tipo = String(mudar.tipo);
           await trx('parceiros')
@@ -559,6 +562,12 @@ export async function importar(
         regime: p.regime ?? (p.documento && onlyDigits(p.documento).length === 11 ? 'Pessoa física' : 'Não informado'),
         uf: p.uf,
       });
+      const cpf = !!p.documento && onlyDigits(p.documento).length === 11;
+      await trx('parceiros')
+        .where({ id: novo.id })
+        .update({
+          regime_fonte: p.regime ? 'Informado na planilha' : cpf ? 'Inferido: CPF (pessoa física)' : null,
+        });
       const ref: RefParceiro = {
         id: Number(novo.id),
         tipo: papel,

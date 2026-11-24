@@ -69,16 +69,29 @@ function DaEmpresa({ alternar }: { alternar: React.ReactNode }) {
   useEffect(carregar, [carregar]);
   const { ocupado, consultar } = useConsulta(carregar);
   const pendentes = (linhas ?? []).filter((p) => p.documento && !p.consultado).map((p) => p.id);
+  const comCnpj = (linhas ?? []).filter((p) => p.documento && p.documento.length > 14).map((p) => p.id);
 
   return (
     <>
       <PageHeader title="Clientes e fornecedores" icon="people">
         {alternar}
-        {can('parceiros', 'editar') && pendentes.length > 0 && (
-          <Button variant="light" disabled={ocupado} onClick={() => void consultar(pendentes)}>
-            <i className="bi bi-search me-1" /> {ocupado ? 'Consultando…' : `Consultar CNPJs (${pendentes.length})`}
-          </Button>
-        )}
+        {can('parceiros', 'editar') &&
+          (pendentes.length > 0 ? (
+            <Button variant="light" disabled={ocupado} onClick={() => void consultar(pendentes)}>
+              <i className="bi bi-search me-1" /> {ocupado ? 'Consultando…' : `Consultar CNPJs (${pendentes.length})`}
+            </Button>
+          ) : (
+            comCnpj.length > 0 && (
+              <Button
+                variant="light"
+                disabled={ocupado}
+                onClick={() => void consultar(comCnpj)}
+                title="Consulta de novo todos os CNPJs (regimes informados à mão ou na planilha são mantidos)"
+              >
+                <i className="bi bi-arrow-repeat me-1" /> {ocupado ? 'Consultando…' : 'Consultar de novo'}
+              </Button>
+            )
+          ))}
       </PageHeader>
       <BarraEmpresa empresas={empresas} valor={id} onChange={escolher} />
       <Card className="card-app">
@@ -120,6 +133,11 @@ function DaEmpresa({ alternar }: { alternar: React.ReactNode }) {
                         <ValueBadge value={p.regime} colors={CORES} />
                         {p.documento && !p.consultado && (
                           <i className="bi bi-question-circle ms-1 text-muted" title="CNPJ ainda não consultado" />
+                        )}
+                        {p.regimeFonte && (
+                          <div className="small text-muted text-wrap" style={{ maxWidth: '22rem' }}>
+                            {p.regimeFonte}
+                          </div>
                         )}
                       </td>
                       <td>{p.uf ?? '—'}</td>

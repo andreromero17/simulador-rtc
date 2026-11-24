@@ -22,7 +22,10 @@ export async function parceirosDaEmpresa(db: Db, empresaId: number): Promise<Par
   if (!ids.length) return [];
   const linhas = (await db('parceiros')
     .whereIn('id', ids)
-    .select('id', 'nome', 'documento', 'tipo', 'regime', 'uf', 'consultado_em')) as Record<string, unknown>[];
+    .select('id', 'nome', 'documento', 'tipo', 'regime', 'regime_fonte', 'uf', 'consultado_em')) as Record<
+    string,
+    unknown
+  >[];
   return linhas
     .map((p) => {
       const id = Number(p.id);
@@ -32,6 +35,7 @@ export async function parceirosDaEmpresa(db: Db, empresaId: number): Promise<Par
         documento: (p.documento as string) ?? null,
         tipo: String(p.tipo ?? ''),
         regime: String(p.regime ?? 'Não informado'),
+        regimeFonte: (p.regime_fonte as string) ?? null,
         uf: (p.uf as string) ?? null,
         consultado: !!p.consultado_em,
         faturado: Math.round((vendas.get(id)?.total ?? 0) * 100) / 100,
