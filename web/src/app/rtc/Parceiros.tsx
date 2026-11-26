@@ -175,8 +175,11 @@ function DaEmpresa({ alternar }: { alternar: React.ReactNode }) {
         </Card.Body>
       </Card>
       <p className="small text-muted mt-2">
-        O regime decide quem toma crédito na simulação. A consulta de CNPJ traz Simples e MEI; Lucro Real e Presumido se
-        ajustam à mão no cadastro.
+        O regime decide quem toma crédito na simulação. A consulta de CNPJ traz Simples e MEI (situação atual) e o Lucro
+        Real ou Presumido declarado na ECF do último ano publicado pela Receita. Sem ECF, identifica Lucro Real por
+        sinais fortes (S.A. aberta, instituição financeira, capital acima de R$ 50 mi). O resto fica "Regime normal (não
+        identificado)": a partir de 2027 ele toma crédito do IBS/CBS como Real ou Presumido; só a comparação com hoje
+        (crédito de PIS/Cofins do Lucro Real) depende de ajustar à mão.
       </p>
     </>
   );

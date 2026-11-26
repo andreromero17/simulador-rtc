@@ -3,6 +3,12 @@
 Versões do sistema construído sobre o frame (a versão fica em `shared/src/app/info.ts`).
 As versões do frame estão no `CHANGELOG.md` da raiz.
 
+## 0.5.0 — 2026-11-26
+
+- Consulta de CNPJ traz o regime declarado na ECF (Lucro Real, Presumido, Arbitrado, imune/isenta) do último ano
+  publicado pela Receita nos dados abertos, via Minha Receita (agora a fonte principal; BrasilAPI de reserva).
+  Ordem: Simples/MEI atual → ECF → inferências → não identificado.
+
 ## 0.4.0 — 2026-11-23
 
 - Consulta de CNPJ infere o regime quando há sinal forte: administração pública → Órgão público; S.A. de capital

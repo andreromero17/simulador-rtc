@@ -1,14 +1,16 @@
 // =============================================================================
-// Consulta de CNPJ em base pública (dados abertos da Receita Federal via BrasilAPI; Minha Receita de reserva):
-// razão social, UF, município, CNAE e — o que importa aqui — a opção pelo Simples Nacional / MEI.
-// O Lucro Real × Presumido não é público: fica "Regime normal (não identificado)" até alguém informar.
+// Consulta de CNPJ em base pública (dados abertos da Receita Federal via Minha Receita; BrasilAPI de reserva):
+// razão social, UF, município, CNAE, a opção pelo Simples Nacional / MEI e o regime declarado na ECF (Lucro Real ou
+// Presumido, publicado anualmente pela RFB; vem da Minha Receita). Sem ECF, infere por sinais fortes ou deixa
+// "Regime normal (não identificado)".
 // Fontes configuráveis por RTC_CNPJ_FONTES (URLs separadas por vírgula, com {cnpj}).
 // =============================================================================
 import { onlyDigits, type ResultadoConsultaCnpj as ResultadoConsulta } from '@frame/shared';
 import type { Db } from '../../db/knex';
 import { nowLocal } from '../../utils/time';
 
-const FONTES_PADRAO = ['https://brasilapi.com.br/api/cnpj/v1/{cnpj}', 'https://minhareceita.org/{cnpj}'];
+// Minha Receita primeiro: além do cadastro, traz o regime declarado na ECF (Lucro Real/Presumido) dos dados abertos da RFB
+const FONTES_PADRAO = ['https://minhareceita.org/{cnpj}', 'https://brasilapi.com.br/api/cnpj/v1/{cnpj}'];
 function fontes() {
   const env = (process.env.RTC_CNPJ_FONTES ?? '')
     .split(',')
@@ -24,10 +26,55 @@ export interface DadosCnpj {
   uf: string | null;
   municipio: string | null;
   cnae: string | null;
-  regime: 'Simples Nacional' | 'MEI' | 'Lucro Real' | 'Órgão público' | 'Regime normal (não identificado)';
+  regime:
+    | 'Simples Nacional'
+    | 'MEI'
+    | 'Lucro Real'
+    | 'Lucro Presumido'
+    | 'Órgão público'
+    | 'Regime normal (não identificado)';
   /** De onde veio o regime (mostrado no cadastro) */
   fonte: string;
   situacao: string | null;
+}
+
+const semAcento = (t: string) =>
+  t
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+/** Campo por nome sem acento (a Minha Receita publica `regime_tributário`/`forma_de_tributação`) */
+function campo(o: Record<string, unknown>, nome: string): unknown {
+  const k = Object.keys(o).find((x) => semAcento(x) === nome);
+  return k ? o[k] : undefined;
+}
+
+export interface RegimeEcf {
+  ano: number;
+  forma: string;
+}
+
+/** Forma de tributação mais recente declarada na ECF (dados abertos da RFB), se houver */
+export function regimeDaEcf(j: Record<string, unknown>): RegimeEcf | null {
+  const lista = campo(j, 'regime_tributario');
+  if (!Array.isArray(lista)) return null;
+  const itens = lista
+    .map((x) => {
+      const o = (x ?? {}) as Record<string, unknown>;
+      return {
+        ano: Number(o.ano) || 0,
+        forma: String(campo(o, 'forma_de_tributacao') ?? '').trim(),
+        scp: String(campo(o, 'cnpj_da_scp') ?? '').trim(),
+      };
+    })
+    .filter((x) => x.ano && x.forma && !x.scp); // ignora sociedades em conta de participação
+  if (!itens.length) return null;
+  const ultimo = Math.max(...itens.map((x) => x.ano));
+  const doAno = itens.filter((x) => x.ano === ultimo).map((x) => semAcento(x.forma));
+  // no mesmo ano pode haver mais de uma (troca de regime): Real prevalece
+  const forma = doAno.find((f) => f.includes('real')) ?? doAno[0]!;
+  return { ano: ultimo, forma };
 }
 
 /** Capital social a partir do qual a empresa é tratada como provável Lucro Real */
@@ -51,10 +98,24 @@ export function interpretar(j: Record<string, unknown>): DadosCnpj {
   const divisao = cnaeCod ? Number(cnaeCod.slice(0, 2)) : 0;
   const situacao = (j.descricao_situacao_cadastral as string) ?? null;
 
+  const ecf = regimeDaEcf(j);
+
   let regime: DadosCnpj['regime'];
   let fonte: string;
+  // situação atual do Simples/MEI prevalece; depois o regime declarado na ECF; depois as inferências
   if (mei) [regime, fonte] = ['MEI', 'Consulta do CNPJ: optante pelo MEI'];
   else if (simples) [regime, fonte] = ['Simples Nacional', 'Consulta do CNPJ: optante pelo Simples Nacional'];
+  else if (ecf?.forma.includes('real'))
+    [regime, fonte] = ['Lucro Real', `Receita Federal: ECF ${ecf.ano} no Lucro Real`];
+  else if (ecf?.forma.includes('presumido'))
+    [regime, fonte] = ['Lucro Presumido', `Receita Federal: ECF ${ecf.ano} no Lucro Presumido`];
+  else if (ecf?.forma.includes('arbitrado'))
+    [regime, fonte] = ['Regime normal (não identificado)', `Receita Federal: ECF ${ecf.ano} no Lucro Arbitrado`];
+  else if (ecf && (ecf.forma.includes('imune') || ecf.forma.includes('isenta')))
+    [regime, fonte] = [
+      natureza >= 1000 && natureza < 2000 ? 'Órgão público' : 'Regime normal (não identificado)',
+      `Receita Federal: ECF ${ecf.ano} como imune/isenta do IRPJ`,
+    ];
   else if (natureza >= 1000 && natureza < 2000)
     [regime, fonte] = ['Órgão público', 'Consulta do CNPJ: administração pública'];
   else if (natureza === 2046) [regime, fonte] = ['Lucro Real', 'Inferido: S.A. de capital aberto'];

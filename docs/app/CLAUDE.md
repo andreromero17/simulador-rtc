@@ -34,6 +34,9 @@ referência por ano). Categorias e cenários vêm na migração `20261121171009_
 - Créditos: fornecedor do regime regular → IBS/CBS embutido no preço pago (fornecedor mantém o preço); fornecedor do
   Simples → parcela CBS/IBS do DAS de um fornecedor típico (Anexo III, RBT12 R$ 500 mil, premissa).
 - Cliente do regime regular credita o IBS/CBS destacado; Simples puro/MEI/PF/órgão público/não informado não.
+- Regime dos clientes/fornecedores (`server/src/app/rtc/cnpj.ts`): Simples/MEI atual → ECF (dados abertos da RFB, via
+  Minha Receita) → inferência (órgão público, S.A. aberta, CNAE 64/65, capital ≥ R$ 50 mi). Regime informado à mão ou
+  na planilha (`regime_fonte` começa com "Informado") não é trocado pela consulta, salvo Simples/MEI.
 - Simples: puro (CBS/IBS no DAS) × híbrido (DAS sem CBS/IBS + regime regular); a API devolve as duas opções.
 
 ## O que NÃO pode mudar sem decisão

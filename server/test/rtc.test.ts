@@ -311,6 +311,30 @@ describe('inferência do regime pela consulta de CNPJ', () => {
     expect(
       interpretar({ codigo_natureza_juridica: 2062, capital_social: 1_000_000, cnae_fiscal: 6201501 }).regime,
     ).toBe('Regime normal (não identificado)');
+    // regime declarado na ECF (campos com acento, como publica a Minha Receita); o ano mais recente vale
+    const ecf = (forma: string, ano = 2024) => ({
+      ano,
+      cnpj_da_scp: null,
+      forma_de_tributação: forma,
+      quantidade_de_escrituracoes: 1,
+    });
+    expect(
+      interpretar({
+        capital_social: 300_000,
+        regime_tributário: [ecf('LUCRO PRESUMIDO', 2022), ecf('LUCRO REAL', 2024)],
+      }),
+    ).toMatchObject({ regime: 'Lucro Real', fonte: 'Receita Federal: ECF 2024 no Lucro Real' });
+    // ECF vence a inferência pelo capital
+    expect(
+      interpretar({
+        capital_social: 90_000_000,
+        regime_tributario: [{ ano: 2024, forma_de_tributacao: 'LUCRO PRESUMIDO' }],
+      }).regime,
+    ).toBe('Lucro Presumido');
+    // Simples (situação atual) vence a ECF
+    expect(interpretar({ opcao_pelo_simples: true, regime_tributario: [ecf('LUCRO PRESUMIDO')] }).regime).toBe(
+      'Simples Nacional',
+    );
     // Simples vence a inferência
     expect(interpretar({ opcao_pelo_simples: true, capital_social: 80_000_000 }).regime).toBe('Simples Nacional');
     expect(interpretar({ descricao_situacao_cadastral: 'BAIXADA' }).fonte).toContain('BAIXADA');
