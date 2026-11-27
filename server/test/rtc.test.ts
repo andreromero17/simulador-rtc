@@ -375,6 +375,29 @@ describe('inferência do regime pela consulta de CNPJ', () => {
   });
 });
 
+describe('resposta real da Minha Receita (Home Doctor, nov/2026, sem o quadro societário)', () => {
+  it('lê o regime da ECF mais recente', () => {
+    const j = {
+      cnpj: '00603226000187',
+      uf: 'SP',
+      porte: 'DEMAIS',
+      capital_social: 300000,
+      cnae_fiscal: 8712300,
+      opcao_pelo_mei: null,
+      opcao_pelo_simples: null,
+      codigo_natureza_juridica: 2062,
+      descricao_situacao_cadastral: 'ATIVA',
+      regime_tributario: [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024].map((ano) => ({
+        ano,
+        cnpj_da_scp: null,
+        forma_de_tributacao: 'LUCRO REAL',
+        quantidade_de_escrituracoes: 1,
+      })),
+    };
+    expect(interpretar(j)).toMatchObject({ regime: 'Lucro Real', fonte: 'Receita Federal: ECF 2024 no Lucro Real' });
+  });
+});
+
 describe('fontes da consulta de CNPJ', () => {
   it('espera e repete na Minha Receita quando há limite de requisições; registra a fonte', async () => {
     const chamadas: string[] = [];
