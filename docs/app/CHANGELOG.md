@@ -3,6 +3,15 @@
 Versões do sistema construído sobre o frame (a versão fica em `shared/src/app/info.ts`).
 As versões do frame estão no `CHANGELOG.md` da raiz.
 
+## 0.5.2 — 2026-11-27
+
+- Consulta de CNPJ: um só botão "Consultar CNPJs" pega quem nunca foi consultado **e** quem ainda está como
+  "Regime normal (não identificado)", "Não informado" ou só inferido — reconsulta até a ECF aparecer.
+- Chamada às fontes com identificação (User-Agent) e prazo de 15 s.
+- Diagnóstico: depois da consulta a tela mostra quantos vieram com regime da ECF, qual serviço respondeu
+  (Minha Receita × BrasilAPI) e o problema da fonte que falhou (ex.: "Minha Receita: HTTP 403"); o motivo também
+  fica no campo de origem do regime.
+
 ## 0.5.1 — 2026-11-27
 
 - Consulta de CNPJ: com limite de requisições (429) ou instabilidade (5xx) na Minha Receita, espera e repete antes de

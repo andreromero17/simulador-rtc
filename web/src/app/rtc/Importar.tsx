@@ -7,6 +7,7 @@ import { api, download, errorMessage } from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
 import PageHeader from '../../components/PageHeader';
 import { SeletorEmpresa } from './comum';
+import { resumoConsulta } from './consulta';
 import { brl, useEmpresaEscolhida, useEmpresas } from './util';
 
 function Resumo({ p }: { p: PreviaImportacao }) {
@@ -272,13 +273,10 @@ export default function Importar() {
 
           {consulta && (
             <Alert variant="light" className="border">
-              CNPJs consultados: {consulta.consultados} · atualizados: {consulta.atualizados} · não encontrados:{' '}
-              {consulta.naoEncontrados}
-              {consulta.falhas > 0 && ` · falhas: ${consulta.falhas}`}
+              {resumoConsulta(consulta)}
               {consulta.restantes > 0 && (
                 <>
                   {' '}
-                  · faltam {consulta.restantes}.{' '}
                   <Button size="sm" variant="link" className="p-0 align-baseline" onClick={() => void consultar()}>
                     Consultar mais
                   </Button>

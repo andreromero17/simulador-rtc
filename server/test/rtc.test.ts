@@ -426,7 +426,22 @@ describe('fontes da consulta de CNPJ', () => {
         ? { ok: false, status: 503, json: async () => ({}) }
         : { ok: true, status: 200, json: async () => ({ opcao_pelo_simples: false }) };
     const d = await consultarCnpj('00.603.226/0001-87', busca, 0);
-    expect(d?.fonte).toContain('via BrasilAPI');
+    expect(d?.fonte).toContain('via BrasilAPI (Minha Receita: HTTP 503)');
+  });
+
+  it('bloqueio (403) da Minha Receita aparece no resumo da consulta', async () => {
+    const [ins] = await ctx
+      .db('parceiros')
+      .insert({ nome: 'Bloqueado', documento: '06.990.590/0001-23', tipo: 'Cliente', regime: 'Não informado' })
+      .returning('id');
+    const id = typeof ins === 'object' ? ins.id : ins;
+    const busca = async (url: string) =>
+      url.includes('minhareceita')
+        ? { ok: false, status: 403, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => ({ opcao_pelo_simples: false }) };
+    const r = await atualizarParceiros(ctx.db, { ids: [id], busca, intervaloMs: 0, esperaMs: 0 });
+    expect(r).toMatchObject({ consultados: 1, comEcf: 0, porFonte: { BrasilAPI: 1 } });
+    expect(r.problemas).toEqual(['Minha Receita: HTTP 403']);
   });
 });
 

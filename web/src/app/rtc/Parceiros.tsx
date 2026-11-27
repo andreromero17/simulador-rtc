@@ -11,6 +11,7 @@ import CrudList from '../../pages/CrudList';
 import PageHeader from '../../components/PageHeader';
 import ValueBadge from '../../components/ValueBadge';
 import { BarraEmpresa } from './comum';
+import { resumoConsulta } from './consulta';
 import { brl, useEmpresaEscolhida, useEmpresas } from './util';
 
 const CORES = getEntity('parceiros')?.fields.find((f) => f.name === 'regime')?.colors ?? {};
@@ -18,16 +19,14 @@ const CORES = getEntity('parceiros')?.fields.find((f) => f.name === 'regime')?.c
 function useConsulta(aoTerminar: () => void) {
   const toast = useToast();
   const [ocupado, setOcupado] = useState(false);
+  const [ultimo, setUltimo] = useState<ResultadoConsultaCnpj | null>(null);
   const consultar = async (ids?: number[]) => {
     setOcupado(true);
     try {
       const r = await api.post<ResultadoConsultaCnpj>('/rtc/parceiros/consultar', ids ? { ids } : {});
-      toast.success(
-        `${r.atualizados} CNPJ(s) atualizado(s)` +
-          (r.naoEncontrados ? `, ${r.naoEncontrados} não encontrado(s)` : '') +
-          (r.falhas ? `, ${r.falhas} falha(s)` : '') +
-          (r.restantes ? `. Faltam ${r.restantes}: clique de novo.` : '.'),
-      );
+      setUltimo(r);
+      if (r.problemas.length || r.falhas) toast.error(resumoConsulta(r));
+      else toast.success(resumoConsulta(r));
       aoTerminar();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -35,7 +34,7 @@ function useConsulta(aoTerminar: () => void) {
       setOcupado(false);
     }
   };
-  return { ocupado, consultar };
+  return { ocupado, consultar, ultimo };
 }
 
 function Alternar({ modo, setModo }: { modo: 'empresa' | 'todos'; setModo: (m: 'empresa' | 'todos') => void }) {
@@ -67,33 +66,49 @@ function DaEmpresa({ alternar }: { alternar: React.ReactNode }) {
       .catch((e) => toast.error(errorMessage(e)));
   }, [id, toast]);
   useEffect(carregar, [carregar]);
-  const { ocupado, consultar } = useConsulta(carregar);
-  const pendentes = (linhas ?? []).filter((p) => p.documento && !p.consultado).map((p) => p.id);
-  const comCnpj = (linhas ?? []).filter((p) => p.documento && p.documento.length > 14).map((p) => p.id);
+  const { ocupado, consultar, ultimo } = useConsulta(carregar);
+  // sem regime confirmado: nunca consultado, não identificado/não informado ou só inferido (sem ECF)
+  const aConsultar = (linhas ?? [])
+    .filter(
+      (p) =>
+        p.documento &&
+        p.documento.length > 14 &&
+        !(p.regimeFonte ?? '').startsWith('Informado') &&
+        (!p.consultado ||
+          p.regime === 'Não informado' ||
+          p.regime === 'Regime normal (não identificado)' ||
+          (p.regimeFonte ?? '').startsWith('Inferido')),
+    )
+    .map((p) => p.id);
 
   return (
     <>
       <PageHeader title="Clientes e fornecedores" icon="people">
         {alternar}
-        {can('parceiros', 'editar') &&
-          (pendentes.length > 0 ? (
-            <Button variant="light" disabled={ocupado} onClick={() => void consultar(pendentes)}>
-              <i className="bi bi-search me-1" /> {ocupado ? 'Consultando…' : `Consultar CNPJs (${pendentes.length})`}
-            </Button>
-          ) : (
-            comCnpj.length > 0 && (
-              <Button
-                variant="light"
-                disabled={ocupado}
-                onClick={() => void consultar(comCnpj)}
-                title="Consulta de novo todos os CNPJs (regimes informados à mão ou na planilha são mantidos)"
-              >
-                <i className="bi bi-arrow-repeat me-1" /> {ocupado ? 'Consultando…' : 'Consultar de novo'}
-              </Button>
-            )
-          ))}
+        {can('parceiros', 'editar') && aConsultar.length > 0 && (
+          <Button
+            variant="light"
+            disabled={ocupado}
+            onClick={() => void consultar(aConsultar)}
+            title="Consulta os CNPJs ainda sem regime confirmado (os informados à mão ou na planilha são mantidos)"
+          >
+            <i className="bi bi-search me-1" /> {ocupado ? 'Consultando…' : `Consultar CNPJs (${aConsultar.length})`}
+          </Button>
+        )}
       </PageHeader>
       <BarraEmpresa empresas={empresas} valor={id} onChange={escolher} />
+      {ocupado && (
+        <div className="small mb-2">
+          <Spinner size="sm" className="me-2" />
+          Consultando os CNPJs um a um (pode levar alguns minutos)…
+        </div>
+      )}
+      {ultimo && !ocupado && (
+        <div className={`small mb-2 ${ultimo.problemas.length || ultimo.falhas ? 'rtc-neg' : ''}`}>
+          <i className="bi bi-info-circle me-1" />
+          {resumoConsulta(ultimo)}
+        </div>
+      )}
       <Card className="card-app">
         <Card.Body className="p-0">
           {!linhas ? (

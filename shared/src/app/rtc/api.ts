@@ -41,6 +41,12 @@ export interface ResultadoConsultaCnpj {
   naoEncontrados: number;
   falhas: number;
   restantes: number;
+  /** Quantas respostas vieram de cada serviço (ex.: { 'Minha Receita': 38, BrasilAPI: 2 }) */
+  porFonte: Record<string, number>;
+  /** Quantos tiveram o regime pela ECF */
+  comEcf: number;
+  /** Problemas encontrados nas fontes (ex.: "Minha Receita: HTTP 403"), sem repetição */
+  problemas: string[];
 }
 
 export interface ServicoDoCatalogo {

@@ -6,7 +6,7 @@
 // Fontes configuráveis por RTC_CNPJ_FONTES (URLs separadas por vírgula, com {cnpj}).
 // =============================================================================
 import { onlyDigits, type ResultadoConsultaCnpj as ResultadoConsulta } from '@frame/shared';
-import type { Db } from '../../db/knex';
+import { likeOp, type Db } from '../../db/knex';
 import { nowLocal } from '../../utils/time';
 
 // Minha Receita primeiro: além do cadastro, traz o regime declarado na ECF (Lucro Real/Presumido) dos dados abertos da RFB
@@ -35,6 +35,9 @@ export interface DadosCnpj {
     | 'Regime normal (não identificado)';
   /** De onde veio o regime (mostrado no cadastro) */
   fonte: string;
+  /** Serviço que respondeu e problemas nas fontes anteriores */
+  via?: string;
+  problemas?: string[];
   situacao: string | null;
 }
 
@@ -160,7 +163,9 @@ export async function consultarCnpj(
 ): Promise<DadosCnpj | null> {
   const d = onlyDigits(cnpj);
   if (d.length !== 14) return null;
+  const problemas: string[] = [];
   for (const f of fontes()) {
+    const via = nomeFonte(f);
     // limite de requisições (429) ou instabilidade (5xx): espera e tenta de novo antes de ir para a próxima fonte,
     // porque só a Minha Receita traz o regime da ECF
     for (let tentativa = 0; tentativa < 3; tentativa++) {
@@ -168,20 +173,29 @@ export async function consultarCnpj(
         const res = await busca(f.replace('{cnpj}', d));
         if (res.status === 404) return null;
         if (res.status === 429 || res.status >= 500) {
+          if (tentativa === 2) problemas.push(`${via}: HTTP ${res.status}`);
           if (esperaMs) await espera(esperaMs * (tentativa + 1));
           continue;
         }
-        if (!res.ok) break;
+        if (!res.ok) {
+          problemas.push(`${via}: HTTP ${res.status}`);
+          break;
+        }
         const dados = interpretar((await res.json()) as Record<string, unknown>);
-        const via = nomeFonte(f);
-        dados.fonte = `${dados.fonte} · via ${via}`.slice(0, 120);
+        const motivo = problemas.length ? ` (${problemas.join('; ')})` : '';
+        dados.fonte = `${dados.fonte} · via ${via}${motivo}`.slice(0, 120); // coluna de 120
+        dados.via = via;
+        dados.problemas = problemas;
         return dados;
-      } catch {
-        break; // erro de rede/prazo: próxima fonte
+      } catch (err) {
+        const nome =
+          (err as Error)?.name === 'AbortError' ? 'tempo esgotado' : (err as Error)?.message || 'erro de rede';
+        problemas.push(`${via}: ${nome}`.slice(0, 80));
+        break; // próxima fonte
       }
     }
   }
-  throw new Error('Serviço de consulta de CNPJ indisponível');
+  throw Object.assign(new Error('Serviço de consulta de CNPJ indisponível'), { problemas });
 }
 
 async function fetchComPrazo(url: string) {
@@ -205,7 +219,18 @@ export async function atualizarParceiros(
 ): Promise<ResultadoConsulta> {
   const limite = Math.min(opts.limite ?? (opts.ids?.length ? 100 : 30), 100);
   const base = db('parceiros').whereNull('excluido_em').whereNotNull('documento');
-  const q = opts.ids?.length ? base.clone().whereIn('id', opts.ids) : base.clone().whereNull('consultado_em');
+  // sem ids: quem nunca foi consultado e quem ainda não tem regime confirmado (sem ECF nem Simples/MEI, e não
+  // informado à mão) — assim "não identificado" e inferências são reconsultados até a ECF aparecer
+  const q = opts.ids?.length
+    ? base.clone().whereIn('id', opts.ids)
+    : base
+        .clone()
+        .where((w) =>
+          w
+            .whereNull('consultado_em')
+            .orWhereIn('regime', ['Não informado', 'Regime normal (não identificado)'])
+            .orWhere('regime_fonte', likeOp(db), 'Inferido%'),
+        );
   const todos = (await q.select('id', 'documento', 'regime', 'regime_fonte', 'nome', 'uf', 'municipio')).filter(
     (p) => onlyDigits(p.documento).length === 14,
   );
@@ -216,6 +241,12 @@ export async function atualizarParceiros(
     naoEncontrados: 0,
     falhas: 0,
     restantes: todos.length - lote.length,
+    porFonte: {},
+    comEcf: 0,
+    problemas: [],
+  };
+  const anotar = (lista: string[] | undefined) => {
+    for (const x of lista ?? []) if (!r.problemas.includes(x) && r.problemas.length < 8) r.problemas.push(x);
   };
   for (const [i, p] of lote.entries()) {
     if (i && opts.intervaloMs !== 0) await espera(opts.intervaloMs ?? 400);
@@ -223,8 +254,9 @@ export async function atualizarParceiros(
     let dados: DadosCnpj | null;
     try {
       dados = await consultarCnpj(p.documento, opts.busca, opts.esperaMs);
-    } catch {
+    } catch (err) {
       r.falhas++;
+      anotar((err as { problemas?: string[] }).problemas);
       continue;
     }
     if (!dados) {
@@ -232,6 +264,9 @@ export async function atualizarParceiros(
       await db('parceiros').where({ id: p.id }).update({ consultado_em: nowLocal() });
       continue;
     }
+    if (dados.via) r.porFonte[dados.via] = (r.porFonte[dados.via] ?? 0) + 1;
+    if (dados.fonte.startsWith('Receita Federal: ECF')) r.comEcf++;
+    anotar(dados.problemas);
     // regime informado à mão ou na planilha não é trocado pela consulta, exceto quando a base pública mostra
     // Simples/MEI (fato cadastral, não inferência)
     const fato = dados.regime === 'Simples Nacional' || dados.regime === 'MEI';
