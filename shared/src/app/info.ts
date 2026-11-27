@@ -1,4 +1,4 @@
 // Identidade do sistema construído sobre o frame
 import type { AppInfo } from '../types';
 
-export const appInfo: AppInfo = { nome: 'Simulador RTC', versao: '0.5.0', icone: 'calculator' };
+export const appInfo: AppInfo = { nome: 'Simulador RTC', versao: '0.5.1', icone: 'calculator' };

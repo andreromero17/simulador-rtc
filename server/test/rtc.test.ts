@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { seedExemplos } from '../src/app/seed';
-import { atualizarParceiros, interpretar } from '../src/app/rtc/cnpj';
+import { atualizarParceiros, consultarCnpj, interpretar } from '../src/app/rtc/cnpj';
 import { competenciaDe } from '../src/app/rtc/importacao';
 import { normalizarItem, sugerirCClassTrib } from '../src/app/rtc/catalogo';
 import { makeTestApp, type TestCtx } from './helpers';
@@ -369,10 +369,41 @@ describe('inferência do regime pela consulta de CNPJ', () => {
       regime: 'Lucro Presumido',
       regime_fonte: 'Informado à mão',
     });
-    expect(await ctx.db('parceiros').where({ id: idInferido }).first()).toMatchObject({
+    const inferido = await ctx.db('parceiros').where({ id: idInferido }).first();
+    expect(inferido.regime).toBe('Lucro Real');
+    expect(inferido.regime_fonte).toBe('Inferido: S.A. de capital aberto · via Minha Receita');
+  });
+});
+
+describe('fontes da consulta de CNPJ', () => {
+  it('espera e repete na Minha Receita quando há limite de requisições; registra a fonte', async () => {
+    const chamadas: string[] = [];
+    let n = 0;
+    const busca = async (url: string) => {
+      chamadas.push(url);
+      if (url.includes('minhareceita') && n++ === 0) return { ok: false, status: 429, json: async () => ({}) };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ regime_tributario: [{ ano: 2024, forma_de_tributacao: 'LUCRO REAL' }] }),
+      };
+    };
+    const d = await consultarCnpj('00.603.226/0001-87', busca, 0);
+    expect(d).toMatchObject({
       regime: 'Lucro Real',
-      regime_fonte: 'Inferido: S.A. de capital aberto',
+      fonte: 'Receita Federal: ECF 2024 no Lucro Real · via Minha Receita',
     });
+    expect(chamadas.every((u) => u.includes('minhareceita'))).toBe(true);
+    expect(chamadas).toHaveLength(2);
+  });
+
+  it('cai para a BrasilAPI quando a Minha Receita está fora', async () => {
+    const busca = async (url: string) =>
+      url.includes('minhareceita')
+        ? { ok: false, status: 503, json: async () => ({}) }
+        : { ok: true, status: 200, json: async () => ({ opcao_pelo_simples: false }) };
+    const d = await consultarCnpj('00.603.226/0001-87', busca, 0);
+    expect(d?.fonte).toContain('via BrasilAPI');
   });
 });
 

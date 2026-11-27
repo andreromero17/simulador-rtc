@@ -148,17 +148,37 @@ export function regimeManual(p: { regime?: unknown; regime_fonte?: unknown }) {
   return !fonte && ['Lucro Real', 'Lucro Presumido', 'Órgão público'].includes(String(p.regime ?? ''));
 }
 
-export async function consultarCnpj(cnpj: string, busca: Busca = fetchComPrazo): Promise<DadosCnpj | null> {
+const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const nomeFonte = (url: string) =>
+  url.includes('minhareceita') ? 'Minha Receita' : url.includes('brasilapi') ? 'BrasilAPI' : new URL(url).hostname;
+
+export async function consultarCnpj(
+  cnpj: string,
+  busca: Busca = fetchComPrazo,
+  esperaMs = 1_500,
+): Promise<DadosCnpj | null> {
   const d = onlyDigits(cnpj);
   if (d.length !== 14) return null;
   for (const f of fontes()) {
-    try {
-      const res = await busca(f.replace('{cnpj}', d));
-      if (res.status === 404) return null;
-      if (!res.ok) continue;
-      return interpretar((await res.json()) as Record<string, unknown>);
-    } catch {
-      // tenta a próxima fonte
+    // limite de requisições (429) ou instabilidade (5xx): espera e tenta de novo antes de ir para a próxima fonte,
+    // porque só a Minha Receita traz o regime da ECF
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      try {
+        const res = await busca(f.replace('{cnpj}', d));
+        if (res.status === 404) return null;
+        if (res.status === 429 || res.status >= 500) {
+          if (esperaMs) await espera(esperaMs * (tentativa + 1));
+          continue;
+        }
+        if (!res.ok) break;
+        const dados = interpretar((await res.json()) as Record<string, unknown>);
+        const via = nomeFonte(f);
+        dados.fonte = `${dados.fonte} · via ${via}`.slice(0, 120);
+        return dados;
+      } catch {
+        break; // erro de rede/prazo: próxima fonte
+      }
     }
   }
   throw new Error('Serviço de consulta de CNPJ indisponível');
@@ -174,8 +194,6 @@ async function fetchComPrazo(url: string) {
   }
 }
 
-const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 /**
  * Consulta os CNPJs ainda não consultados (ou os `ids` pedidos), no máximo `limite` por chamada, e grava regime,
  * UF, município e CNAE. Não sobrescreve um regime já informado à mão como Lucro Real/Presumido, a menos que a
@@ -183,7 +201,7 @@ const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export async function atualizarParceiros(
   db: Db,
-  opts: { ids?: number[]; limite?: number; intervaloMs?: number; busca?: Busca } = {},
+  opts: { ids?: number[]; limite?: number; intervaloMs?: number; busca?: Busca; esperaMs?: number } = {},
 ): Promise<ResultadoConsulta> {
   const limite = Math.min(opts.limite ?? (opts.ids?.length ? 100 : 30), 100);
   const base = db('parceiros').whereNull('excluido_em').whereNotNull('documento');
@@ -204,7 +222,7 @@ export async function atualizarParceiros(
     r.consultados++;
     let dados: DadosCnpj | null;
     try {
-      dados = await consultarCnpj(p.documento, opts.busca);
+      dados = await consultarCnpj(p.documento, opts.busca, opts.esperaMs);
     } catch {
       r.falhas++;
       continue;

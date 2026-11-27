@@ -3,6 +3,11 @@
 Versões do sistema construído sobre o frame (a versão fica em `shared/src/app/info.ts`).
 As versões do frame estão no `CHANGELOG.md` da raiz.
 
+## 0.5.1 — 2026-11-27
+
+- Consulta de CNPJ: com limite de requisições (429) ou instabilidade (5xx) na Minha Receita, espera e repete antes de
+  cair para a BrasilAPI (que não traz a ECF). A origem do regime passa a dizer qual serviço respondeu ("via ...").
+
 ## 0.5.0 — 2026-11-26
 
 - Consulta de CNPJ traz o regime declarado na ECF (Lucro Real, Presumido, Arbitrado, imune/isenta) do último ano
